@@ -22,7 +22,7 @@ jobs:
           python-version: "3.11"
 
       - name: Extract code graph
-        run: python tools/graph_extractor.py --output code_graph.sqlite
+        run: python tools/graph_extractor.py --output code_graph.sqlite --exclude .venv --exclude venv --exclude env
 
       - name: Commit updated graph
         run: |

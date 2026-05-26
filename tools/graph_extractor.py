@@ -6,6 +6,7 @@ Usage:
     python tools/graph_extractor.py
     python tools/graph_extractor.py --output /tmp/code_graph.sqlite
     python tools/graph_extractor.py --root /path/to/repo
+    python tools/graph_extractor.py --exclude .venv --exclude build
 """
 import ast
 import argparse
@@ -112,12 +113,16 @@ def _module_name(root: Path, path: Path) -> str:
     return str(rel.with_suffix("")).replace("/", ".")
 
 
-def extract(root: Path, db_path: Path):
+def extract(root: Path, db_path: Path, exclude: list[str] | None = None):
+    exclude_dirs = set(exclude or []) | {"__pycache__"}
     con = sqlite3.connect(db_path)
     con.executescript("DROP TABLE IF EXISTS calls; DROP TABLE IF EXISTS imports; DROP TABLE IF EXISTS symbols;")
     con.executescript(SCHEMA)
 
-    py_files = [p for p in root.rglob("*.py") if "__pycache__" not in str(p)]
+    def _is_excluded(path: Path) -> bool:
+        return any(part in exclude_dirs for part in path.relative_to(root).parts)
+
+    py_files = [p for p in root.rglob("*.py") if not _is_excluded(p)]
     for path in sorted(py_files):
         try:
             tree = ast.parse(path.read_text(encoding="utf-8", errors="replace"))
@@ -130,6 +135,7 @@ def extract(root: Path, db_path: Path):
         visitor.visit(tree)
 
     con.commit()
+    con.execute("VACUUM")
     sym_count = con.execute("SELECT COUNT(*) FROM symbols").fetchone()[0]
     call_count = con.execute("SELECT COUNT(*) FROM calls").fetchone()[0]
     imp_count = con.execute("SELECT COUNT(*) FROM imports").fetchone()[0]
@@ -141,5 +147,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--root", default=".", help="Repo root (default: cwd)")
     parser.add_argument("--output", default="code_graph.sqlite")
+    parser.add_argument("--exclude", action="append", default=[".venv", "venv", "env"],
+                        help="Directory names to exclude (repeatable, default: .venv venv env)")
     args = parser.parse_args()
-    extract(Path(args.root).resolve(), Path(args.output))
+    extract(Path(args.root).resolve(), Path(args.output), exclude=args.exclude)
