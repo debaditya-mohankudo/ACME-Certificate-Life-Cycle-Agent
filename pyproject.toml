@@ -22,6 +22,9 @@ llm-openai    = ["langchain>=0.3", "langchain-core>=1.2", "openai>=1.0"]
 llm-ollama    = ["langchain>=0.3", "langchain-core>=1.2", "langchain-ollama>=1.0"]
 llm-all       = ["langchain>=0.3", "langchain-core>=1.2", "langchain-anthropic>=0.3", "langchain-ollama>=1.0", "anthropic>=0.82"]
 
+# Team memory POC extras — SQLite memory + code graph + RAG
+team-memory = ["sentence-transformers>=3.0", "chromadb>=0.6"]
+
 # DNS-01 challenge provider extras
 dns-cloudflare = ["cloudflare>=3.0"]
 dns-route53    = ["boto3>=1.34"]
