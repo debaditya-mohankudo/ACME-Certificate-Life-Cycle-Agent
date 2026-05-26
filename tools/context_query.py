@@ -1,6 +1,8 @@
 """Unified 3-layer context query — merges SQLite memory, code graph, and RAG results.
 
 This is the single entry point Claude should use to answer questions about the codebase.
+See memory/acme_team_memory_poc.md for full setup, layer overview, and how to add memories.
+
 Each layer contributes a different signal:
 
   Layer 2 — SQLite memory  : curated facts, gotchas, architectural decisions (keyword scoring)

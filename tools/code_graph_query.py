@@ -1,5 +1,8 @@
 """Query code_graph.sqlite — Claude calls this to answer structural code questions.
 
+Part of the three-layer team memory POC. See memory/acme_team_memory_poc.md for
+full setup, layer overview, and how to rebuild the graph.
+
 Usage:
     python tools/code_graph_query.py callers sign_request
     python tools/code_graph_query.py callees handle_challenge

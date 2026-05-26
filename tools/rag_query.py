@@ -1,5 +1,8 @@
 """Query the RAG index — semantic search over PR descriptions + docs.
 
+Part of the three-layer team memory POC. See memory/acme_team_memory_poc.md for
+full setup, layer overview, and how to rebuild the index.
+
 Usage:
     python tools/rag_query.py "how does JWS signing work"
     python tools/rag_query.py "why is storage atomic" --top 3

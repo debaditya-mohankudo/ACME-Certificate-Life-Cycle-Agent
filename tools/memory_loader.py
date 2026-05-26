@@ -1,5 +1,8 @@
 """Query team_memory.sqlite — score memories against a prompt, return top-N.
 
+Part of the three-layer team memory POC. See memory/acme_team_memory_poc.md for
+full setup, layer overview, and how to add new memories.
+
 Usage:
     python tools/memory_loader.py "how does JWS signing work"
     python tools/memory_loader.py "storage" --top 3
