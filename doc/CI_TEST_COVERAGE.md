@@ -1,7 +1,7 @@
 # CI Test Coverage
 
 [![Coverage](https://img.shields.io/badge/coverage-92%25-brightgreen?style=for-the-badge&logo=pytest&logoColor=white)](#code-coverage)
-[![Unit Tests](https://img.shields.io/badge/unit_tests-527_passing-brightgreen?style=for-the-badge&logo=pytest&logoColor=white)](#tests-currently-in-ci-527-total)
+[![Unit Tests](https://img.shields.io/badge/unit_tests-509_passing-brightgreen?style=for-the-badge&logo=pytest&logoColor=white)](#tests-currently-in-ci-509-total)
 [![Integration Tests](https://img.shields.io/badge/integration_tests-9_pebble-blue?style=for-the-badge&logo=docker&logoColor=white)](#can-we-add-pebble-tests-to-ci)
 [![CI Runtime](https://img.shields.io/badge/CI_runtime-~9s-blue?style=for-the-badge&logo=githubactions&logoColor=white)](#workflow-githubworkflowstestsyml)
 
@@ -64,7 +64,7 @@ Impact:
 uv run pytest -v -n auto -m "not integration"
 ```
 
-**527 tests, 3 skips, no external services required.**
+**509 tests, 3 skips, no external services required.**
 
 Parallel execution via xdist (8 concurrent workers on typical GitHub runners).
 Unit tests are isolated and mocked — safe to parallelize.
@@ -72,7 +72,7 @@ Integration tests (Pebble) excluded from CI by marker.
 
 ---
 
-## Tests Currently in CI (527 total)
+## Tests Currently in CI (509 total)
 
 ### `tests/test_unit_acme.py` — 55 tests
 Core ACME RFC 8555 protocol layer. All HTTP calls mocked with the `responses`
@@ -491,7 +491,7 @@ Deterministic summary reporter logic (when `LLM_DISABLED=true`); plain-text form
 | `tests/test_revocation_pebble.py` | 3 | Requires Pebble ACME stub server |
 **Pebble total: 9 integration tests.**
 
-**Total test count: 536 tests (527 unit tests in CI + 9 Pebble integration tests excluded; 3 skipped)**
+**Total test count: 518 tests (509 unit tests in CI + 9 Pebble integration tests excluded; 3 skipped)**
 
 **Overall line coverage: 92%** (6,338 / 6,884 statements)
 
@@ -668,8 +668,8 @@ unit-test job.
 ## Metadata
 
 - **Owner**: QA / CI team
-- **Status**: active (527 unit tests with xdist parallelization as of 2026-03-03)
+- **Status**: active (509 unit tests with xdist parallelization as of 2026-06-13)
 - **Coverage**: 92% line coverage (6,338 / 6,884 statements); +4 new test files at 100%; router 60%→100%, storage 23%→96%, finalizer 22%→88%, error_handler 26%→99%
-- **Last reviewed**: 2026-03-03
-- **Last change**: Added 78 unit tests for LLM_DISABLED config validator and deterministic node implementations; 527 unit tests passing (449→527), 0 regressions
+- **Last reviewed**: 2026-06-13
+- **Last change**: Removed LLM entirely — deleted llm/factory.py and 4 LLM-only test files; 509 unit tests passing (527→509 after removing LLM-specific tests), 0 regressions
 - **Next review due**: 2026-04-03 (monthly, or on significant test changes)
