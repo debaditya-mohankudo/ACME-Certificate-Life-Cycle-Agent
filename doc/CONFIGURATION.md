@@ -29,17 +29,21 @@ backoff, retry, exponential, scheduler, error handler, integration, protocol, bo
 
 | Variable | Default | Description |
 |---|---|---|
-| `CA_PROVIDER` | `digicert` | CA to use: `digicert` · `letsencrypt` · `letsencrypt_staging` · `zerossl` · `sectigo` · `custom`. For named providers the config is authoritative and X.509 issuer detection is skipped. For `custom`, the scanner detects the issuing CA from existing certs and warns on mismatch (advisory only). |
+| `CERT_ISSUANCE_MODE` | `acme` | `acme` or `spiffe` — strict either/or, picks which issuance flow runs. One running instance issues either ACME certs or SPIFFE SVIDs, never both; run two separate instances/configs if you need both. Setting fields from the wrong group (e.g. `MANAGED_DOMAINS` while `spiffe`) is rejected at config load. See [DESIGN_SPIFFE_SVID_EXTENSION.md](DESIGN_SPIFFE_SVID_EXTENSION.md) *(pending)*. |
+| `CA_PROVIDER` | `digicert` | *(acme mode only)* CA to use: `digicert` · `letsencrypt` · `letsencrypt_staging` · `zerossl` · `sectigo` · `custom`. For named providers the config is authoritative and X.509 issuer detection is skipped. For `custom`, the scanner detects the issuing CA from existing certs and warns on mismatch (advisory only). |
 | `ACME_EAB_KEY_ID` | — | EAB key identifier (DigiCert only) |
 | `ACME_EAB_HMAC_KEY` | — | Base64url-encoded HMAC key (DigiCert only) |
 | `ACME_DIRECTORY_URL` | *(auto-set)* | ACME directory URL — auto-populated from `CA_PROVIDER`; required only when `CA_PROVIDER=custom` |
-| `MANAGED_DOMAINS` | *(required)* | Comma-separated list of domains to monitor |
+| `MANAGED_DOMAINS` | *(required)* | *(acme mode only)* Comma-separated list of domains to monitor |
 | `RENEWAL_THRESHOLD_DAYS` | `30` | Renew when fewer than N days remain |
 | `CERT_STORE_PATH` | `./certs` | Root directory for PEM files |
 | `ACCOUNT_KEY_PATH` | `./account.key` | Path to persist the ACME account key |
-| `HTTP_CHALLENGE_MODE` | `standalone` | `standalone` or `webroot` |
-| `HTTP_CHALLENGE_PORT` | `80` | Port for the standalone HTTP-01 server |
-| `WEBROOT_PATH` | — | Required when `HTTP_CHALLENGE_MODE=webroot` |
+| `HTTP_CHALLENGE_MODE` | `standalone` | *(acme mode only)* `standalone` or `webroot` |
+| `HTTP_CHALLENGE_PORT` | `80` | *(acme mode only)* Port for the standalone HTTP-01 server |
+| `WEBROOT_PATH` | — | *(acme mode only)* Required when `HTTP_CHALLENGE_MODE=webroot` |
+| `SPIRE_AGENT_SOCKET_PATH` | `/tmp/spire-agent/public/api.sock` | *(spiffe mode only)* Local Unix domain socket for the SPIRE Agent's Workload API — no network directory URL, since SPIFFE authentication is attestation-based, not domain-validated |
+| `SPIFFE_TRUST_DOMAIN` | — | *(spiffe mode only, required)* Your SPIRE deployment's trust domain (e.g. `example.org`) — there is no public CA equivalent; trust is rooted in your own SPIRE server |
+| `MANAGED_SPIFFE_IDS` | *(empty)* | *(spiffe mode only)* Comma-separated list of SPIFFE IDs this agent expects to hold/renew — for planner classification and monitoring only; the SPIRE server's own registration entries are the actual source of truth for what's issuable |
 | `LLM_DISABLED` | `true` | Gates the renewal planner only. If `false`, the planner classifies domains via LLM (urgent/routine/skip); error_handler and reporter are always deterministic regardless of this flag |
 | `LLM_PROVIDER` | `claude_cli` | LLM vendor for the planner: `claude_cli` (default — shells to `claude -p`, no API key) · `anthropic` · `openai` · `ollama` |
 | `ANTHROPIC_API_KEY` | — | Claude API key (required when `LLM_PROVIDER=anthropic` and `LLM_DISABLED=false`; not needed for `claude_cli`) |

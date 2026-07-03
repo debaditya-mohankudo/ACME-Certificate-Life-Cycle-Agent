@@ -17,6 +17,8 @@ from pydantic_settings import (
     SettingsConfigDict,
 )
 
+from logger import logger
+
 
 class _CommaFallbackMixin:
     """Return the raw string when JSON parsing fails.
@@ -52,7 +54,15 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    # ── CA Provider ────────────────────────────────────────────────────────
+    # ── Certificate issuance mode ──────────────────────────────────────────
+    # Strict either/or — a single running instance issues either ACME certs
+    # or SPIFFE SVIDs, never both. Run two separate instances/configs if you
+    # need both. Fields below are grouped by which mode consults them; the
+    # validators near the bottom of this class reject the wrong group being
+    # set for the selected mode.
+    CERT_ISSUANCE_MODE: Literal["acme", "spiffe"] = "acme"
+
+    # ── CA Provider (CERT_ISSUANCE_MODE="acme" only) ───────────────────────
     CA_PROVIDER: Literal[
         "digicert", "letsencrypt", "letsencrypt_staging", "zerossl", "sectigo", "custom"
     ] = "digicert"
@@ -63,9 +73,23 @@ class Settings(BaseSettings):
     # Only consulted when CA_PROVIDER="custom"
     ACME_DIRECTORY_URL: str = ""
 
-    # ── Domain management ──────────────────────────────────────────────────
+    # ── Domain management (CERT_ISSUANCE_MODE="acme" only) ─────────────────
     MANAGED_DOMAINS: List[str] = []
     RENEWAL_THRESHOLD_DAYS: int = 30
+
+    # ── SPIFFE/SPIRE (CERT_ISSUANCE_MODE="spiffe" only) ────────────────────
+    # No public CA, no HTTP-01/DNS-01 challenge — authentication happens via
+    # node + workload attestation against your own SPIRE server, reached
+    # through the SPIRE Agent's local Workload API socket. There is no
+    # ACME_DIRECTORY_URL/EAB equivalent: trust is rooted in your own SPIRE
+    # deployment, not the public WebPKI. See doc/DESIGN_SPIFFE_SVID_EXTENSION.md.
+    SPIRE_AGENT_SOCKET_PATH: str = "/tmp/spire-agent/public/api.sock"
+    SPIFFE_TRUST_DOMAIN: str = ""
+    # SPIFFE IDs this agent expects to hold/renew — the selector-based
+    # registration entries on the SPIRE server are the actual source of
+    # truth for what's issuable; this is only used for planner classification
+    # and monitoring, analogous to MANAGED_DOMAINS for the ACME flow.
+    MANAGED_SPIFFE_IDS: List[str] = []
 
     # ── Storage ────────────────────────────────────────────────────────────
     CERT_STORE_PATH: str = "./certs"
@@ -143,6 +167,14 @@ class Settings(BaseSettings):
             return [d.strip() for d in v.split(",") if d.strip()]
         return v  # type: ignore[return-value]
 
+    @field_validator("MANAGED_SPIFFE_IDS", mode="before")
+    @classmethod
+    def parse_spiffe_ids(cls, v: object) -> List[str]:
+        """Accept comma-separated string or list, same as MANAGED_DOMAINS."""
+        if isinstance(v, str):
+            return [d.strip() for d in v.split(",") if d.strip()]
+        return v  # type: ignore[return-value]
+
     @field_validator("HTTP_CHALLENGE_MODE")
     @classmethod
     def validate_challenge_mode(cls, v: str) -> str:
@@ -213,8 +245,40 @@ class Settings(BaseSettings):
         return self
 
     @model_validator(mode="after")
+    def validate_cert_issuance_mode_fields(self) -> "Settings":
+        """Reject ACME/SPIFFE fields set for the wrong CERT_ISSUANCE_MODE.
+
+        The two flows have incompatible subjects, auth models, and "what to
+        manage" identifiers (see config.py's SPIFFE/SPIRE section comment) —
+        catching a misconfigured mix here, at construction time, is cheaper
+        than discovering it mid-run.
+        """
+        if self.CERT_ISSUANCE_MODE == "acme":
+            if self.SPIRE_AGENT_SOCKET_PATH != "/tmp/spire-agent/public/api.sock":
+                raise ValueError(
+                    "SPIRE_AGENT_SOCKET_PATH must not be set when CERT_ISSUANCE_MODE='acme'"
+                )
+            if self.SPIFFE_TRUST_DOMAIN or self.MANAGED_SPIFFE_IDS:
+                raise ValueError(
+                    "SPIFFE_TRUST_DOMAIN/MANAGED_SPIFFE_IDS must not be set "
+                    "when CERT_ISSUANCE_MODE='acme'"
+                )
+        elif self.CERT_ISSUANCE_MODE == "spiffe":
+            if self.MANAGED_DOMAINS:
+                raise ValueError(
+                    "MANAGED_DOMAINS must not be set when CERT_ISSUANCE_MODE='spiffe'"
+                )
+            if not self.SPIFFE_TRUST_DOMAIN:
+                raise ValueError(
+                    "SPIFFE_TRUST_DOMAIN must be set when CERT_ISSUANCE_MODE='spiffe'"
+                )
+        return self
+
+    @model_validator(mode="after")
     def validate_eab_credentials(self) -> "Settings":
         """Reject partial EAB configuration before any network call is made."""
+        if self.CERT_ISSUANCE_MODE != "acme":
+            return self
         if self.CA_PROVIDER in {"digicert", "zerossl", "sectigo"}:
             key_set = bool(self.ACME_EAB_KEY_ID)
             hmac_set = bool(self.ACME_EAB_HMAC_KEY)
@@ -229,6 +293,8 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def validate_webroot(self) -> "Settings":
         """Require WEBROOT_PATH when webroot challenge mode is selected."""
+        if self.CERT_ISSUANCE_MODE != "acme":
+            return self
         if self.HTTP_CHALLENGE_MODE == "webroot" and not self.WEBROOT_PATH:
             raise ValueError(
                 "WEBROOT_PATH must be set when HTTP_CHALLENGE_MODE='webroot'"
@@ -238,6 +304,8 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def validate_dns_config(self) -> "Settings":
         """Validate required DNS provider settings for DNS-01 mode."""
+        if self.CERT_ISSUANCE_MODE != "acme":
+            return self
         if self.HTTP_CHALLENGE_MODE != "dns":
             return self
         if self.DNS_PROVIDER == "cloudflare" and not self.CLOUDFLARE_API_TOKEN:
@@ -253,6 +321,8 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def resolve_acme_directory(self) -> "Settings":
         """Resolve ACME directory URL from provider presets or custom value."""
+        if self.CERT_ISSUANCE_MODE != "acme":
+            return self
         if any(os.environ.get(k) for k in (
             "DIGICERT_ACME_DIRECTORY", "DIGICERT_EAB_KEY_ID", "DIGICERT_EAB_HMAC_KEY"
         )):
@@ -274,6 +344,30 @@ class Settings(BaseSettings):
             self.ACME_DIRECTORY_URL = _PRESETS[self.CA_PROVIDER]
         elif not self.ACME_DIRECTORY_URL:
             raise ValueError("ACME_DIRECTORY_URL must be set when CA_PROVIDER='custom'")
+        return self
+
+    @model_validator(mode="after")
+    def log_resolved_settings(self) -> "Settings":
+        """Log the resolved config once construction succeeds.
+
+        Runs last (declaration order) so mode-dependent fields like
+        ACME_DIRECTORY_URL are already resolved. Never logs secrets:
+        EAB credentials, API keys, cloud provider tokens.
+        """
+        if self.CERT_ISSUANCE_MODE == "acme":
+            logger.info(
+                "Settings resolved: mode=acme ca_provider=%s directory_url=%s "
+                "managed_domains=%d challenge_mode=%s llm_disabled=%s llm_provider=%s",
+                self.CA_PROVIDER, self.ACME_DIRECTORY_URL, len(self.MANAGED_DOMAINS),
+                self.HTTP_CHALLENGE_MODE, self.LLM_DISABLED, self.LLM_PROVIDER,
+            )
+        else:
+            logger.info(
+                "Settings resolved: mode=spiffe trust_domain=%s agent_socket=%s "
+                "managed_spiffe_ids=%d llm_disabled=%s llm_provider=%s",
+                self.SPIFFE_TRUST_DOMAIN, self.SPIRE_AGENT_SOCKET_PATH,
+                len(self.MANAGED_SPIFFE_IDS), self.LLM_DISABLED, self.LLM_PROVIDER,
+            )
         return self
 
 
