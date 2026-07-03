@@ -10,7 +10,11 @@ set -eu
 
 COMPOSE="docker compose -f docker-compose.spire.yml"
 TRUST_DOMAIN="example.org"
-WORKLOAD_UID="${WORKLOAD_UID:-0}"   # UID the spire-test/spire-agent containers run as
+# spire-test (tests/test_spiffe_spire.py's execution environment) runs as
+# root by default, same as the base Dockerfile's `test` stage — so the
+# demo workload is registered against uid 0. Override for a different
+# workload container's UID.
+WORKLOAD_UID="${WORKLOAD_UID:-0}"
 
 echo "Generating a join token for the agent..."
 JOIN_TOKEN=$($COMPOSE exec -T spire-server /opt/spire/bin/spire-server token generate \

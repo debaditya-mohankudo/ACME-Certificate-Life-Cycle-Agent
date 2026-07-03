@@ -102,10 +102,24 @@ Pebble needs `ACME_INSECURE=true` because it serves HTTPS with a self-signed cer
 docker compose -f docker-compose.spire.yml up -d spire-server
 ./spire/register-workload.sh
 
-# Phase 2: agent + test runner, using the token phase 1 generated
+# Phase 2: agent, using the token phase 1 generated
 SPIRE_JOIN_TOKEN=$(cat spire/data/join_token.txt) \
-  docker compose -f docker-compose.spire.yml up -d spire-agent spire-test
+  docker compose -f docker-compose.spire.yml up -d spire-agent
 ```
+
+**Join tokens are single-use.** Once `spire-agent` has attested successfully, re-running `up -d spire-agent` (even with the *same* token file) fails with `"join token does not exist or has already been used"` and crashes the container — the agent doesn't need restarting once it's up. If you do need to restart it, re-run `./spire/register-workload.sh` first to mint a fresh token.
+
+### Run the integration tests
+
+The Workload API socket is shared via a **named Docker volume**, not a host bind mount — a bind mount looks appealing (host-run pytest connecting directly, the way `test_integration_pebble.py` reaches Pebble's published TCP port) but **Docker Desktop on macOS does not proxy bind-mounted Unix domain sockets from container to host** (the socket file appears on the host side, but connecting to it gets `ECONNREFUSED` — only Docker's own `docker.sock` gets special-cased forwarding). So `tests/test_spiffe_spire.py` must run **inside** the `spire-test` container, not directly via a host-run `pytest`:
+
+```bash
+docker compose -f docker-compose.spire.yml build spire-test
+docker compose -f docker-compose.spire.yml run --rm --no-deps spire-test \
+  uv run pytest tests/test_spiffe_spire.py -v -m integration
+```
+
+**Use `--no-deps`.** Without it, `docker compose run` reconciles `spire-test`'s `depends_on: [spire-agent]` and recreates `spire-agent` — which crashes it, per the single-use join token issue above, since no fresh `SPIRE_JOIN_TOKEN` is set for that recreation. `--no-deps` leaves the already-running, already-attested `spire-agent` alone.
 
 ### Register an additional workload
 
@@ -167,6 +181,18 @@ SPIRE_JOIN_TOKEN=$(cat spire/data/join_token.txt) \
 **Cause:** No registration entry matches that workload's selectors (commonly a UID mismatch — check what UID the calling container actually runs as with `id` inside it).
 
 **Fix:** Register an entry with the correct selector (see "Register an additional workload" above).
+
+### Issue: `spire-agent` crashes with `"join token does not exist or has already been used"`
+
+**Cause:** Join tokens are single-use. This fires if you re-run `up -d spire-agent` (directly, or indirectly via `docker compose run spire-test` reconciling its `depends_on`) after the agent has already attested once.
+
+**Fix:** Run `./spire/register-workload.sh` again for a fresh token, then start the agent with it. When running integration tests, use `docker compose run --rm --no-deps spire-test ...` so the already-running agent isn't touched.
+
+### Issue: `rpc error: ... connection reset by peer` when fetching from a host-run script
+
+**Cause:** Trying to connect to the Workload API socket from a host process against a bind-mounted socket path — this doesn't work on Docker Desktop for macOS (see "Run the integration tests" above).
+
+**Fix:** Run the fetch from inside a container that shares the same named volume as `spire-agent` (e.g. `spire-test`, or a one-off `docker run -v spiffe-svid-issuance_spire-agent-socket:/tmp/spire-agent/public ...`), not directly from the host.
 
 ---
 

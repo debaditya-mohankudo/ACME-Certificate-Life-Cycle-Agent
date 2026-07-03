@@ -22,10 +22,17 @@ services:
     volumes:
       - ./spire/agent/agent.conf:/opt/spire/conf/agent/agent.conf:ro
       - spire-agent-data:/opt/spire/data
-      # Workload API Unix domain socket — shared with spire-test below.
-      # This is the part that does NOT translate from Pebble's plain TCP
-      # port mapping: SPIFFE Workload API access is deliberately restricted
-      # to a local socket, never network-exposed.
+      # Workload API Unix domain socket — shared with spire-test below via a
+      # named volume, not a host bind mount. A bind mount looks appealing
+      # (let host-run pytest connect directly, the way Pebble's published
+      # TCP port works) but Docker Desktop on macOS does not proxy
+      # bind-mounted Unix domain sockets from container to host — the file
+      # exists on the host side but connecting to it gets ECONNREFUSED
+      # (only Docker's own docker.sock gets special-cased forwarding). This
+      # is the part that does NOT translate from Pebble's plain TCP port
+      # mapping: SPIFFE Workload API access is deliberately restricted to a
+      # local socket. Integration tests run *inside* spire-test below,
+      # sharing this named volume, not directly from host pytest.
       - spire-agent-socket:/tmp/spire-agent/public
     # SPIRE_JOIN_TOKEN must be generated first via ./spire/register-workload.sh
     # (run against spire-server) and exported before starting this service:
