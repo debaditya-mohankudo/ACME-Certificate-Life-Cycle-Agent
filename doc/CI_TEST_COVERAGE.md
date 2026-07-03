@@ -64,7 +64,7 @@ Impact:
 uv run pytest -v -n auto -m "not integration"
 ```
 
-**566 tests, 0 skips, no external services required.**
+**586 tests, 0 skips, no external services required.**
 
 Parallel execution via xdist (8 concurrent workers on typical GitHub runners).
 Unit tests are isolated and mocked — safe to parallelize.
@@ -489,9 +489,10 @@ Deterministic summary reporter logic (when `LLM_DISABLED=true`); plain-text form
 | `tests/test_integration_pebble.py` | 4 | Requires Pebble ACME stub server |
 | `tests/test_lifecycle_pebble.py` | 2 | Requires Pebble ACME stub server |
 | `tests/test_revocation_pebble.py` | 3 | Requires Pebble ACME stub server |
-**Pebble total: 9 integration tests.**
+| `tests/test_spiffe_spire.py` | 3 | Requires local SPIRE server/agent — must run inside the `spire-test` container, not host pytest (see [SPIRE_TESTING_SERVER.md](SPIRE_TESTING_SERVER.md)) |
+**Pebble total: 9 integration tests. SPIRE total: 3 integration tests.**
 
-**Total test count: 575 tests (566 unit tests in CI + 9 Pebble integration tests excluded; 0 skipped)**
+**Total test count: 597 tests (585 unit tests in CI + 12 integration tests excluded [9 Pebble + 3 SPIRE]; 0 skipped)**
 
 **Overall line coverage: 92%** (6,338 / 6,884 statements — not recomputed this pass; re-run `pytest --cov` to refresh once significant new code lands)
 

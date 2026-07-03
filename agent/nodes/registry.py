@@ -19,6 +19,7 @@ from agent.nodes.revocation_router import PickNextRevocationDomainNode
 from agent.nodes.router import PickNextDomainNode
 from agent.nodes.revoker import CertRevokerNode
 from agent.nodes.scanner import CertificateScannerNode
+from agent.nodes.spiffe_attestor import SpiffeAttestorNode
 from agent.nodes.storage import StorageManagerNode
 
 
@@ -36,6 +37,7 @@ NODE_REGISTRY = {
     "order_finalizer": OrderFinalizerNode,
     "cert_downloader": CertDownloaderNode,
     "storage_manager": StorageManagerNode,
+    "spiffe_attestor": SpiffeAttestorNode,
     "error_handler": ErrorHandlerNode,
     "retry_scheduler": RetrySchedulerNode,
     "summary_reporter": SummaryReporterNode,

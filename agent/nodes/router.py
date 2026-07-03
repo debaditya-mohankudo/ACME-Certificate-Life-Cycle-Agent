@@ -66,6 +66,30 @@ def domain_loop_router(state: AgentState) -> str:
     return "all_done"
 
 
+def spiffe_attestation_router(state: AgentState) -> str:
+    """
+    After spiffe_attestor: route to storage_manager (attestation produced an
+    SVID) — or, on failure, skip storage_manager entirely and make the same
+    next_domain/all_done decision domain_loop_router would make after a
+    successful store. A failed attestation has no current_order to store,
+    and routing it through storage_manager anyway would double-count the
+    same domain into failed_renewals/error_log.
+
+    Must not route failures unconditionally back to pick_next_domain: if
+    the failed domain was the last one pending, pick_next_domain would
+    no-op on an empty list and spiffe_attestor would replay the same
+    stale current_domain forever, never reaching summary_reporter. So on
+    failure this inlines domain_loop_router's own decision rather than
+    delegating a second hop to it.
+
+    Returns: "attestation_ok" | "next_domain" | "all_done"
+    """
+    current = state.get("current_domain")
+    if current is not None and current in state.get("failed_renewals", []):
+        return domain_loop_router(state)
+    return "attestation_ok"
+
+
 def challenge_router(state: AgentState) -> str:
     """
     After challenge_verifier: route to csr_generator (success) or

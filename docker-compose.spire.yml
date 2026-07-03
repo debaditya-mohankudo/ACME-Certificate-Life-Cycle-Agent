@@ -1,0 +1,63 @@
+services:
+  spire-server:
+    image: ghcr.io/spiffe/spire-server:1.9.6
+    volumes:
+      - ./spire/server/server.conf:/opt/spire/conf/server/server.conf:ro
+      - spire-server-data:/opt/spire/data
+    ports:
+      - "8081:8081"   # SPIRE server API (join-token registration, entry management)
+    command: ["-config", "/opt/spire/conf/server/server.conf"]
+
+  spire-agent:
+    image: ghcr.io/spiffe/spire-agent:1.9.6
+    depends_on:
+      - spire-server
+    # The unix WorkloadAttestor resolves a connecting process's identity via
+    # /proc, which requires seeing the same PID namespace as the workload
+    # container calling the Workload API. Without this, cross-container
+    # attestation fails with "could not resolve caller information" — this
+    # is the local-Compose analogue of Kubernetes' hostPID requirement for
+    # the SPIRE agent DaemonSet.
+    pid: "host"
+    volumes:
+      - ./spire/agent/agent.conf:/opt/spire/conf/agent/agent.conf:ro
+      - spire-agent-data:/opt/spire/data
+      # Workload API Unix domain socket — shared with spire-test below via a
+      # named volume, not a host bind mount. A bind mount looks appealing
+      # (let host-run pytest connect directly, the way Pebble's published
+      # TCP port works) but Docker Desktop on macOS does not proxy
+      # bind-mounted Unix domain sockets from container to host — the file
+      # exists on the host side but connecting to it gets ECONNREFUSED
+      # (only Docker's own docker.sock gets special-cased forwarding). This
+      # is the part that does NOT translate from Pebble's plain TCP port
+      # mapping: SPIFFE Workload API access is deliberately restricted to a
+      # local socket. Integration tests run *inside* spire-test below,
+      # sharing this named volume, not directly from host pytest.
+      - spire-agent-socket:/tmp/spire-agent/public
+    # SPIRE_JOIN_TOKEN must be generated first via ./spire/register-workload.sh
+    # (run against spire-server) and exported before starting this service:
+    #   SPIRE_JOIN_TOKEN=$(cat spire/data/join_token.txt) \
+    #     docker compose -f docker-compose.spire.yml up -d spire-agent
+    command: ["-config", "/opt/spire/conf/agent/agent.conf", "-joinToken", "${SPIRE_JOIN_TOKEN:-}"]
+
+  spire-test:
+    build:
+      context: .
+      target: test
+    environment:
+      CERT_ISSUANCE_MODE: spiffe
+      SPIFFE_TRUST_DOMAIN: example.org
+      SPIRE_AGENT_SOCKET_PATH: /tmp/spire-agent/public/api.sock
+      MANAGED_SPIFFE_IDS: spiffe://example.org/workload/demo
+      ANTHROPIC_API_KEY: dummy-key-for-testing
+      MAX_RETRIES: "2"
+    volumes:
+      - spire-agent-socket:/tmp/spire-agent/public
+    pid: "host"   # must match spire-agent's PID namespace — see note above
+    depends_on:
+      - spire-agent
+
+volumes:
+  spire-server-data:
+  spire-agent-data:
+  spire-agent-socket:

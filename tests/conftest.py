@@ -41,6 +41,44 @@ requires_pebble = pytest.mark.skipif(
 )
 
 
+# ─── SPIRE availability check ─────────────────────────────────────────────────
+# Unlike Pebble's TCP port, the Workload API is a Unix domain socket, shared
+# via a named Docker volume (not a host bind mount — Docker Desktop on
+# macOS does not proxy bind-mounted Unix sockets from container to host).
+# These integration tests therefore run *inside* the spire-test container
+# (see doc/SPIRE_TESTING_SERVER.md), where SPIRE_AGENT_SOCKET_PATH resolves
+# to the in-container path docker-compose.spire.yml sets.
+
+_SPIRE_AGENT_SOCKET_PATH = os.getenv(
+    "SPIRE_AGENT_SOCKET_PATH", "/tmp/spire-agent/public/api.sock"
+)
+
+
+def _spire_running(socket_path: str = _SPIRE_AGENT_SOCKET_PATH) -> bool:
+    """Return True if the SPIRE Agent's Workload API socket is reachable."""
+    if not Path(socket_path).exists():
+        return False
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
+            sock.settimeout(1)
+            sock.connect(socket_path)
+        return True
+    except OSError:
+        return False
+
+
+requires_spire = pytest.mark.skipif(
+    not _spire_running(),
+    reason=(
+        "SPIRE not running — see doc/SPIRE_TESTING_SERVER.md: "
+        "docker compose -f docker-compose.spire.yml up -d spire-server && "
+        "./spire/register-workload.sh && "
+        "SPIRE_JOIN_TOKEN=$(cat spire/data/join_token.txt) "
+        "docker compose -f docker-compose.spire.yml up -d spire-agent"
+    ),
+)
+
+
 # ─── Settings patch ───────────────────────────────────────────────────────────
 
 @pytest.fixture()
@@ -118,6 +156,44 @@ def dns_settings(pebble_settings):
     yield settings
 
     for k, v in dns_originals.items():
+        setattr(settings, k, v)
+
+
+# ─── SPIRE settings fixture ────────────────────────────────────────────────────
+
+@pytest.fixture()
+def spire_settings(tmp_path: Path):
+    """
+    Mutate the live settings singleton to point at the local SPIRE harness,
+    restore original values after the test. Mirrors pebble_settings.
+    """
+    from config import settings
+
+    originals = {
+        "CERT_ISSUANCE_MODE":      settings.CERT_ISSUANCE_MODE,
+        "SPIRE_AGENT_SOCKET_PATH": settings.SPIRE_AGENT_SOCKET_PATH,
+        "SPIFFE_TRUST_DOMAIN":     settings.SPIFFE_TRUST_DOMAIN,
+        "MANAGED_SPIFFE_IDS":      settings.MANAGED_SPIFFE_IDS,
+        "CERT_STORE_PATH":         settings.CERT_STORE_PATH,
+        "MAX_RETRIES":             settings.MAX_RETRIES,
+        "ANTHROPIC_API_KEY":       settings.ANTHROPIC_API_KEY,
+        "LLM_DISABLED":            settings.LLM_DISABLED,
+    }
+
+    cert_store = tmp_path / "certs"
+    cert_store.mkdir()
+
+    settings.CERT_ISSUANCE_MODE = "spiffe"
+    settings.SPIRE_AGENT_SOCKET_PATH = _SPIRE_AGENT_SOCKET_PATH
+    settings.SPIFFE_TRUST_DOMAIN = "example.org"
+    settings.MANAGED_SPIFFE_IDS = ["spiffe://example.org/workload/demo"]
+    settings.CERT_STORE_PATH = str(cert_store)
+    settings.MAX_RETRIES = 1
+    settings.ANTHROPIC_API_KEY = "dummy-key-for-testing"
+
+    yield settings
+
+    for k, v in originals.items():
         setattr(settings, k, v)
 
 

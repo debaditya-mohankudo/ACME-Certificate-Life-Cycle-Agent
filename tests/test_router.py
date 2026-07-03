@@ -12,6 +12,7 @@ from agent.nodes.router import (
     error_action_router,
     pick_next_domain,
     renewal_router,
+    spiffe_attestation_router,
 )
 
 
@@ -75,6 +76,36 @@ def test_domain_loop_router_empty_returns_all_done():
 
 def test_domain_loop_router_missing_key_returns_all_done():
     assert domain_loop_router({}) == "all_done"
+
+
+# ─── spiffe_attestation_router ────────────────────────────────────────────────
+
+
+def test_spiffe_attestation_router_success_routes_to_storage():
+    state = {"current_domain": "spiffe://example.org/workload/demo", "failed_renewals": []}
+    assert spiffe_attestation_router(state) == "attestation_ok"
+
+
+def test_spiffe_attestation_router_failure_with_more_pending_routes_next_domain():
+    state = {
+        "current_domain": "spiffe://example.org/workload/demo",
+        "failed_renewals": ["spiffe://example.org/workload/demo"],
+        "pending_renewals": ["spiffe://example.org/workload/other"],
+    }
+    assert spiffe_attestation_router(state) == "next_domain"
+
+
+def test_spiffe_attestation_router_failure_on_last_domain_routes_all_done():
+    """Regression guard: routing failure straight back to pick_next_domain
+    unconditionally would infinite-loop when the failed domain was the last
+    one pending — this must make the same all_done decision
+    domain_loop_router would make after a successful store."""
+    state = {
+        "current_domain": "spiffe://example.org/workload/demo",
+        "failed_renewals": ["spiffe://example.org/workload/demo"],
+        "pending_renewals": [],
+    }
+    assert spiffe_attestation_router(state) == "all_done"
 
 
 # ─── challenge_router ─────────────────────────────────────────────────────────

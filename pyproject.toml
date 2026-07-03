@@ -28,9 +28,12 @@ dns-route53    = ["boto3>=1.34"]
 dns-google     = ["google-cloud-dns>=0.34"]
 dns-all        = ["cloudflare>=3.0", "boto3>=1.34", "google-cloud-dns>=0.34"]
 
+# SPIFFE/SPIRE issuance extra — required only when CERT_ISSUANCE_MODE=spiffe
+spiffe = ["spiffe>=0.3"]
+
 [dependency-groups]
 dev = [
-    "acme-certificate-lifecycle-agent[llm-all,dns-all]",
+    "acme-certificate-lifecycle-agent[llm-all,dns-all,spiffe]",
     "coverage>=7.0",
     "langsmith>=0.3",
     "mcp>=1.26.0",
