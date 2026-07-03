@@ -64,7 +64,7 @@ Impact:
 uv run pytest -v -n auto -m "not integration"
 ```
 
-**509 tests, 3 skips, no external services required.**
+**566 tests, 0 skips, no external services required.**
 
 Parallel execution via xdist (8 concurrent workers on typical GitHub runners).
 Unit tests are isolated and mocked — safe to parallelize.
@@ -491,9 +491,9 @@ Deterministic summary reporter logic (when `LLM_DISABLED=true`); plain-text form
 | `tests/test_revocation_pebble.py` | 3 | Requires Pebble ACME stub server |
 **Pebble total: 9 integration tests.**
 
-**Total test count: 518 tests (509 unit tests in CI + 9 Pebble integration tests excluded; 3 skipped)**
+**Total test count: 575 tests (566 unit tests in CI + 9 Pebble integration tests excluded; 0 skipped)**
 
-**Overall line coverage: 92%** (6,338 / 6,884 statements)
+**Overall line coverage: 92%** (6,338 / 6,884 statements — not recomputed this pass; re-run `pytest --cov` to refresh once significant new code lands)
 
 ---
 

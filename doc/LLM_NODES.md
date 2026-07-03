@@ -32,16 +32,23 @@ The planner validates its own output: any domain name the LLM returns that is no
 
 ## LLM provider configuration
 
-The agent supports **Anthropic Claude** (default), **OpenAI**, and **Ollama**. Switch providers by setting `LLM_PROVIDER` in `.env`:
+The agent supports **`claude_cli`** (default), **Anthropic Claude** (API), **OpenAI**, and **Ollama**. Switch providers by setting `LLM_PROVIDER` in `.env`. Only `renewal_planner` actually makes an LLM call — `error_handler` and `summary_reporter` are always deterministic (see [CONFIGURATION.md](CONFIGURATION.md)).
 
-### Anthropic (default)
+### `claude_cli` (default)
+
+Shells to `claude -p --safe-mode --tools none`, reusing your existing Claude Code login — no API key, no `uv sync --extra llm-*` install. Also the best option for quick local testing on RAM-constrained hardware, since inference runs on Anthropic's infra rather than the local box.
+
+```dotenv
+LLM_PROVIDER=claude_cli
+LLM_MODEL_PLANNER=haiku
+```
+
+### Anthropic (API)
 
 ```dotenv
 LLM_PROVIDER=anthropic
 ANTHROPIC_API_KEY=sk-ant-...
 LLM_MODEL_PLANNER=claude-haiku-4-5-20251001
-LLM_MODEL_REPORTER=claude-haiku-4-5-20251001
-LLM_MODEL_ERROR_HANDLER=claude-sonnet-4-6
 ```
 
 ### OpenAI
@@ -50,8 +57,6 @@ LLM_MODEL_ERROR_HANDLER=claude-sonnet-4-6
 LLM_PROVIDER=openai
 OPENAI_API_KEY=sk-...
 LLM_MODEL_PLANNER=gpt-4o-mini
-LLM_MODEL_REPORTER=gpt-4o-mini
-LLM_MODEL_ERROR_HANDLER=gpt-4o
 ```
 
 ### Ollama (local)
@@ -60,8 +65,6 @@ LLM_MODEL_ERROR_HANDLER=gpt-4o
 LLM_PROVIDER=ollama
 OLLAMA_BASE_URL=http://localhost:11434
 LLM_MODEL_PLANNER=llama3.2
-LLM_MODEL_REPORTER=llama3.2
-LLM_MODEL_ERROR_HANDLER=llama3.2
 ```
 
 ---
