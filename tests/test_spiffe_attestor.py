@@ -7,7 +7,8 @@ Covers:
   - Success path: fetches an SVID, writes privkey.pem, populates current_order
   - Failure path: FetchX509SvidError (e.g. unregistered workload) is
     terminal per-domain, not a crash
-  - SPIFFE ID mismatch is logged but non-fatal
+  - No SVID matching current_domain among what the Workload API returned
+    is a terminal failure, not silently stored under the wrong identity
 """
 from __future__ import annotations
 
@@ -77,7 +78,7 @@ def test_fetch_failure_is_terminal_not_a_crash(tmp_path: Path):
 
     node = SpiffeAttestorNode()
     mock_client = MagicMock()
-    mock_client.fetch_x509_svid.side_effect = FetchX509SvidError("no identity issued")
+    mock_client.fetch_x509_svids.side_effect = FetchX509SvidError("no identity issued")
 
     with patch("agent.nodes.spiffe_attestor.WorkloadApiClient", return_value=mock_client):
         result = node.run(_base_state(cert_store_path=str(tmp_path)))
@@ -114,7 +115,7 @@ def test_success_path_writes_privkey_and_populates_current_order(tmp_path: Path)
     mock_svid.spiffe_id = "spiffe://example.org/workload/demo"
 
     mock_client = MagicMock()
-    mock_client.fetch_x509_svid.return_value = mock_svid
+    mock_client.fetch_x509_svids.return_value = [mock_svid]
 
     node = SpiffeAttestorNode()
     with patch("agent.nodes.spiffe_attestor.WorkloadApiClient", return_value=mock_client) as mock_ctor:
@@ -135,7 +136,14 @@ def test_success_path_writes_privkey_and_populates_current_order(tmp_path: Path)
     mock_client.close.assert_called_once()
 
 
-def test_spiffe_id_mismatch_logs_warning_but_still_succeeds(tmp_path: Path):
+def test_no_matching_svid_is_terminal_not_stored_under_wrong_identity(tmp_path: Path):
+    """
+    If the Workload API returns SVIDs but none match the requested
+    current_domain (typo in MANAGED_SPIFFE_IDS, stale registration, a
+    workload with a different default identity, ...), this must fail
+    cleanly rather than silently store a different identity's cert/key
+    under the requested domain's directory.
+    """
     cert, key = _make_self_signed_cert("workload/other")
 
     mock_svid = MagicMock()
@@ -145,12 +153,47 @@ def test_spiffe_id_mismatch_logs_warning_but_still_succeeds(tmp_path: Path):
     mock_svid.spiffe_id = "spiffe://example.org/workload/UNEXPECTED"
 
     mock_client = MagicMock()
-    mock_client.fetch_x509_svid.return_value = mock_svid
+    mock_client.fetch_x509_svids.return_value = [mock_svid]
 
     node = SpiffeAttestorNode()
     with patch("agent.nodes.spiffe_attestor.WorkloadApiClient", return_value=mock_client):
         result = node.run(_base_state(cert_store_path=str(tmp_path)))
 
-    # Mismatch is a warning, not a failure — the fetched SVID is still used
+    assert "current_order" not in result
+    assert result["failed_renewals"] == ["spiffe://example.org/workload/demo"]
+    assert "no SVID matching" in result["error_log"][0]
+    # Must not have written any credentials under the requested domain's directory
+    assert list(tmp_path.rglob("privkey.pem")) == []
+
+
+def test_matching_svid_selected_among_several(tmp_path: Path):
+    """
+    fetch_x509_svids() can return more than one SVID (a workload entitled
+    to multiple identities) — the node must pick the one matching
+    current_domain, not just take the first one back.
+    """
+    other_cert, other_key = _make_self_signed_cert("workload/other")
+    demo_cert, demo_key = _make_self_signed_cert("workload/demo")
+
+    other_svid = MagicMock()
+    other_svid.leaf = other_cert
+    other_svid.cert_chain = []
+    other_svid.private_key = other_key
+    other_svid.spiffe_id = "spiffe://example.org/workload/other"
+
+    demo_svid = MagicMock()
+    demo_svid.leaf = demo_cert
+    demo_svid.cert_chain = []
+    demo_svid.private_key = demo_key
+    demo_svid.spiffe_id = "spiffe://example.org/workload/demo"
+
+    mock_client = MagicMock()
+    # Requested SVID is deliberately not first, to prove selection isn't positional.
+    mock_client.fetch_x509_svids.return_value = [other_svid, demo_svid]
+
+    node = SpiffeAttestorNode()
+    with patch("agent.nodes.spiffe_attestor.WorkloadApiClient", return_value=mock_client):
+        result = node.run(_base_state(cert_store_path=str(tmp_path)))
+
     assert "current_order" in result
     assert "failed_renewals" not in result

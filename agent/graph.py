@@ -66,6 +66,7 @@ from agent.nodes.router import (
     domain_loop_router,
     error_action_router,
     renewal_router,
+    spiffe_attestation_router,
 )
 from agent.state import AgentState
 
@@ -187,6 +188,13 @@ def _build_spiffe_graph(builder: StateGraph) -> None:
     error_handler/retry_scheduler (spiffe_attestor failures are terminal
     per-domain, same treatment storage_manager already gives its own
     failures — see agent/nodes/spiffe_attestor.py).
+
+    spiffe_attestor -> storage_manager is conditional, not unconditional:
+    a failed attestation has no current_order to store, and routing it
+    through storage_manager anyway would double-count the same domain
+    into failed_renewals/error_log. Failures skip straight to the
+    loop-decision (domain_loop_router), same destination storage_manager's
+    own conditional edge reaches on success.
     """
     spiffe_nodes = [
         "certificate_scanner",
@@ -212,7 +220,16 @@ def _build_spiffe_graph(builder: StateGraph) -> None:
     )
 
     builder.add_edge("pick_next_domain", "spiffe_attestor")
-    builder.add_edge("spiffe_attestor", "storage_manager")
+
+    builder.add_conditional_edges(
+        "spiffe_attestor",
+        spiffe_attestation_router,
+        {
+            "attestation_ok": "storage_manager",
+            "next_domain": "pick_next_domain",
+            "all_done": "summary_reporter",
+        },
+    )
 
     builder.add_conditional_edges(
         "storage_manager",

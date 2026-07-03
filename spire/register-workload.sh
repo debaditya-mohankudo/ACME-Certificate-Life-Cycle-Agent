@@ -20,6 +20,9 @@ echo "Generating a join token for the agent..."
 JOIN_TOKEN=$($COMPOSE exec -T spire-server /opt/spire/bin/spire-server token generate \
     -spiffeID "spiffe://${TRUST_DOMAIN}/agent" | awk '/^Token:/ {print $2}')
 echo "Join token: ${JOIN_TOKEN}"
+# spire/data/ is gitignored (holds only this generated token) — doesn't
+# exist on a fresh checkout, so create it before writing.
+mkdir -p spire/data
 echo "${JOIN_TOKEN}" > spire/data/join_token.txt
 
 echo "Registering demo workload (selector: unix:uid:${WORKLOAD_UID})..."

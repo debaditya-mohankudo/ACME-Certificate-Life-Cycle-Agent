@@ -84,7 +84,7 @@ class SpiffeAttestorNode:
             }
 
         try:
-            svid = client.fetch_x509_svid()
+            svids = client.fetch_x509_svids()
         except FetchX509SvidError as exc:
             error = f"spiffe_attestor: failed to fetch SVID for {spiffe_id}: {exc}"
             logger.error(error)
@@ -95,14 +95,19 @@ class SpiffeAttestorNode:
         finally:
             client.close()
 
-        fetched_id = str(svid.spiffe_id)
-        if fetched_id != spiffe_id:
-            logger.warning(
-                "spiffe_attestor: expected %s but Workload API returned %s "
-                "(this is whatever SVID the local agent is entitled to, "
-                "not necessarily the one requested)",
-                spiffe_id, fetched_id,
+        svid = next((s for s in svids if str(s.spiffe_id) == spiffe_id), None)
+        if svid is None:
+            fetched_ids = [str(s.spiffe_id) for s in svids]
+            error = (
+                f"spiffe_attestor: no SVID matching {spiffe_id} among the SVIDs the "
+                f"Workload API returned ({fetched_ids}) — refusing to store a "
+                f"different identity's credentials under this domain's directory"
             )
+            logger.error(error)
+            return {
+                "failed_renewals": state.get("failed_renewals", []) + [spiffe_id],
+                "error_log": state.get("error_log", []) + [error],
+            }
 
         cert_pem = svid.leaf.public_bytes(Encoding.PEM).decode()
         chain_pem = "".join(
