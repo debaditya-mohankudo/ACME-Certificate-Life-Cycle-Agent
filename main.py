@@ -53,14 +53,15 @@ def run_once(
         log.error("No managed domains configured. Set MANAGED_DOMAINS in .env or pass --domains.")
         sys.exit(1)
 
-    _required_keys = {"anthropic": effective_settings.ANTHROPIC_API_KEY, "openai": effective_settings.OPENAI_API_KEY}
-    if effective_settings.LLM_PROVIDER in _required_keys and not _required_keys[effective_settings.LLM_PROVIDER]:
-        log.error(
-            "%s_API_KEY is not set for LLM_PROVIDER=%r. Add it to .env.",
-            effective_settings.LLM_PROVIDER.upper(),
-            effective_settings.LLM_PROVIDER,
-        )
-        sys.exit(1)
+    if not effective_settings.LLM_DISABLED:
+        _required_keys = {"anthropic": effective_settings.ANTHROPIC_API_KEY, "openai": effective_settings.OPENAI_API_KEY}
+        if effective_settings.LLM_PROVIDER in _required_keys and not _required_keys[effective_settings.LLM_PROVIDER]:
+            log.error(
+                "%s_API_KEY is not set for LLM_PROVIDER=%r. Add it to .env.",
+                effective_settings.LLM_PROVIDER.upper(),
+                effective_settings.LLM_PROVIDER,
+            )
+            sys.exit(1)
 
     log.info("Starting certificate lifecycle agent for %d domain(s): %s",
              len(effective_domains), ", ".join(effective_domains))
@@ -112,15 +113,6 @@ def run_revocation(
     unmanaged = [d for d in domains if d not in managed]
     if unmanaged:
         log.warning("Revoking unmanaged domains: %s", ", ".join(unmanaged))
-
-    _required_keys = {"anthropic": effective_settings.ANTHROPIC_API_KEY, "openai": effective_settings.OPENAI_API_KEY}
-    if effective_settings.LLM_PROVIDER in _required_keys and not _required_keys[effective_settings.LLM_PROVIDER]:
-        log.error(
-            "%s_API_KEY is not set for LLM_PROVIDER=%r. Add it to .env.",
-            effective_settings.LLM_PROVIDER.upper(),
-            effective_settings.LLM_PROVIDER,
-        )
-        sys.exit(1)
 
     log.info("Starting revocation run for %d domain(s): %s (reason=%d)",
              len(domains), ", ".join(domains), reason)

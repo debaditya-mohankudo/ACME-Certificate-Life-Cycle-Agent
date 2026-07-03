@@ -40,14 +40,12 @@ backoff, retry, exponential, scheduler, error handler, integration, protocol, bo
 | `HTTP_CHALLENGE_MODE` | `standalone` | `standalone` or `webroot` |
 | `HTTP_CHALLENGE_PORT` | `80` | Port for the standalone HTTP-01 server |
 | `WEBROOT_PATH` | — | Required when `HTTP_CHALLENGE_MODE=webroot` |
-| `LLM_DISABLED` | `false` | If `true`, disables all LLM calls and uses deterministic fallbacks for planner/error_handler/reporter nodes |
-| `LLM_PROVIDER` | `anthropic` | LLM vendor: `anthropic` · `openai` · `ollama` |
-| `ANTHROPIC_API_KEY` | — | Claude API key (required when `LLM_PROVIDER=anthropic`) |
-| `OPENAI_API_KEY` | — | OpenAI API key (required when `LLM_PROVIDER=openai`) |
+| `LLM_DISABLED` | `true` | Gates the renewal planner only. If `false`, the planner classifies domains via LLM (urgent/routine/skip); error_handler and reporter are always deterministic regardless of this flag |
+| `LLM_PROVIDER` | `anthropic` | LLM vendor for the planner: `anthropic` · `openai` · `ollama` |
+| `ANTHROPIC_API_KEY` | — | Claude API key (required when `LLM_PROVIDER=anthropic` and `LLM_DISABLED=false`) |
+| `OPENAI_API_KEY` | — | OpenAI API key (required when `LLM_PROVIDER=openai` and `LLM_DISABLED=false`) |
 | `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama local server URL (used when `LLM_PROVIDER=ollama`) |
 | `LLM_MODEL_PLANNER` | `claude-haiku-4-5-20251001` | Model for renewal planning (adjust based on `LLM_PROVIDER`) |
-| `LLM_MODEL_ERROR_HANDLER` | `claude-sonnet-4-6` | Model for error analysis |
-| `LLM_MODEL_REPORTER` | `claude-haiku-4-5-20251001` | Model for run summary |
 | `SCHEDULE_TIME` | `06:00` | Daily run time (HH:MM, UTC) |
 | `MAX_RETRIES` | `3` | Per-domain retry attempts before skipping |
 | `ACME_INSECURE` | `false` | Disable TLS verification — **testing only, never in production** |
@@ -61,22 +59,26 @@ backoff, retry, exponential, scheduler, error handler, integration, protocol, bo
 ## LLM_DISABLED Configuration
 
 - **Type:** `bool`
-- **Default:** `false`
-- **Description:** When `true`, disables all LLM calls and uses deterministic fallbacks.
+- **Default:** `true`
+- **Description:** Gates the renewal planner's LLM path only (task:362053db). When `true` (default), the planner uses deterministic priority logic. `error_handler` and `reporter` have no LLM path at all regardless of this flag — their LLM implementations were removed in task:0fecd30e and are out of scope for this flag.
 
-### Deterministic Behavior
+### Deterministic Behavior (default, `LLM_DISABLED=true`)
 
-When `LLM_DISABLED=true`:
+- **Renewal Planner:** Renews ALL domains with certificates expiring within `RENEWAL_THRESHOLD_DAYS`, plus all domains missing certificates. No prioritization — see `_renewal_planner_deterministic()` in `agent/nodes/planner.py`.
+- **Error Handler:** Always deterministic — retries up to `MAX_RETRIES` times with exponential backoff (capped at 300s), aborts on fatal ACME errors, skips after max retries.
+- **Summary Reporter:** Always deterministic — plain-text formatted summary (no LLM-generated prose).
+- **No LLM API calls:** No `LLM_PROVIDER`, `LLM_MODEL_PLANNER`, or API key validation required.
 
-- **Renewal Planner:** Renews ALL domains with certificates expiring within `RENEWAL_THRESHOLD_DAYS`, plus all domains missing certificates. No prioritization.
-- **Error Handler:** Retries up to `MAX_RETRIES` times with exponential backoff (capped at 300s). After max retries, skips the domain.
-- **Summary Reporter:** Outputs plain-text formatted summary (no LLM-generated prose).
-- **No LLM API calls:** No `LLM_PROVIDER`, `LLM_MODEL_*`, or API key validation required.
+### LLM-Assisted Planner (`LLM_DISABLED=false`)
+
+- Requires the matching optional extra (`uv sync --extra llm-anthropic` / `llm-openai` / `llm-ollama`) and, for `anthropic`/`openai`, the corresponding API key.
+- The planner classifies each managed domain into `urgent`/`routine`/`skip` via an LLM call, then queues `urgent + routine` for renewal. Output is validated against `managed_domains` — any hallucinated domain is stripped, and any domain the LLM fails to classify is added to `routine` so nothing silently falls through.
+- `error_handler`/`reporter` remain deterministic even with this enabled.
 
 ### Use Cases
 
 - Air-gapped environments without LLM API access
-- Cost optimization (no API calls)  
+- Cost optimization (no API calls)
 - Reproducible, auditable renewal logic
 - Development/testing environments
 

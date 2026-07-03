@@ -230,7 +230,7 @@ async def health(
                 settings_override=effective_settings,
             ):
                 current_settings = config.settings
-                missing_llm_key = (
+                missing_llm_key = not current_settings.LLM_DISABLED and (
                     (current_settings.LLM_PROVIDER == "anthropic" and not current_settings.ANTHROPIC_API_KEY)
                     or (current_settings.LLM_PROVIDER == "openai" and not current_settings.OPENAI_API_KEY)
                 )

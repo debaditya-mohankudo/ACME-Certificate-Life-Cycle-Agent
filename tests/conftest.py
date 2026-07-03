@@ -5,13 +5,18 @@ Pebble fixture
 --------------
 The `pebble_settings` fixture patches the module-level `config.settings`
 singleton so every node in the graph talks to a local Pebble instance instead
-of the configured CA.
+of the configured CA. It also patches ANTHROPIC_API_KEY so no real credential
+is needed for the planner's LLM-based tests.
 """
 from __future__ import annotations
 
+import json
 import os
 import socket
 from pathlib import Path
+from unittest.mock import MagicMock, patch
+
+from langchain_core.messages import AIMessage
 
 import pytest
 
@@ -59,6 +64,8 @@ def pebble_settings(tmp_path: Path):
         "ACME_INSECURE":      settings.ACME_INSECURE,
         "ACME_CA_BUNDLE":     settings.ACME_CA_BUNDLE,
         "MAX_RETRIES":        settings.MAX_RETRIES,
+        "ANTHROPIC_API_KEY":  settings.ANTHROPIC_API_KEY,
+        "LLM_DISABLED":       settings.LLM_DISABLED,
     }
 
     webroot = tmp_path / "webroot"
@@ -79,6 +86,7 @@ def pebble_settings(tmp_path: Path):
     settings.ACME_INSECURE      = True
     settings.ACME_CA_BUNDLE     = ""
     settings.MAX_RETRIES        = 1
+    settings.ANTHROPIC_API_KEY  = "dummy-key-for-testing"  # For LLM credential check
 
     yield settings
 
@@ -111,3 +119,40 @@ def dns_settings(pebble_settings):
 
     for k, v in dns_originals.items():
         setattr(settings, k, v)
+
+
+# ─── LLM mock helpers ─────────────────────────────────────────────────────────
+# Scoped to the renewal planner only — error_handler/reporter's LLM paths were
+# removed in task:0fecd30e and stay removed (task:362053db restores the
+# planner's LLM path only).
+
+def _mock_llm_response(content: str) -> MagicMock:
+    """Return a mock that behaves like a chat model instance.
+
+    llm.invoke() must return a real AIMessage so LangGraph's add_messages
+    reducer can accept it — MagicMock is not a BaseMessage subclass.
+    """
+    llm = MagicMock()
+    llm.invoke.return_value = AIMessage(content=content)
+    return llm
+
+
+PLANNER_RESPONSE = json.dumps({
+    "urgent": [],
+    "routine": ["acme-test.localhost"],
+    "skip": [],
+    "notes": "Test run — renew acme-test.localhost",
+})
+
+
+@pytest.fixture()
+def mock_llm_nodes():
+    """
+    Patch init_chat_model in llm.factory so tests don't need an API key.
+    Returns a planner-compatible response.
+    """
+    with patch(
+        "llm.factory.init_chat_model",
+        return_value=_mock_llm_response(PLANNER_RESPONSE),
+    ):
+        yield

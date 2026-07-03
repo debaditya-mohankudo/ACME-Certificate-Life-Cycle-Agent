@@ -98,6 +98,14 @@ class Settings(BaseSettings):
     GOOGLE_APPLICATION_CREDENTIALS: str = "" # path to service account JSON
     GOOGLE_CLOUD_DNS_ZONE_NAME: str = ""     # GCP managed zone name
 
+    # ── LLM (renewal planner only — error_handler/reporter remain deterministic) ──
+    LLM_DISABLED: bool = True   # Default: deterministic planner; set False + install llm extra to enable LLM
+    LLM_PROVIDER: Literal["anthropic", "openai", "ollama"] = "anthropic"
+    ANTHROPIC_API_KEY: str = ""
+    OPENAI_API_KEY: str = ""
+    OLLAMA_BASE_URL: str = "http://localhost:11434"
+    LLM_MODEL_PLANNER: str = "claude-haiku-4-5-20251001"
+
     # ── Scheduling ─────────────────────────────────────────────────────────
     SCHEDULE_TIME: str = "06:00"
 
@@ -150,6 +158,47 @@ class Settings(BaseSettings):
         if normalized not in allowed:
             raise ValueError(f"KEY_TYPE must be one of {allowed}")
         return normalized
+
+    @field_validator("LLM_DISABLED", mode="before")
+    @classmethod
+    def validate_llm_disabled(cls, v: object) -> bool:
+        """Validate LLM_DISABLED is a boolean flag.
+
+        Accepts truthy/falsy values and converts to bool: bool passthrough,
+        common string forms (true/false/1/0/yes/no), and int-like values.
+        """
+        if isinstance(v, bool):
+            return v
+        if isinstance(v, str):
+            lowered = v.strip().lower()
+            if lowered in {"true", "1", "yes", "on"}:
+                return True
+            elif lowered in {"false", "0", "no", "off"}:
+                return False
+            else:
+                raise ValueError(
+                    f"LLM_DISABLED must be a boolean (true/false), got: {v!r}"
+                )
+        try:
+            return bool(v)
+        except Exception:
+            raise ValueError(
+                f"LLM_DISABLED must be a boolean, got: {type(v).__name__}"
+            )
+
+    @model_validator(mode="after")
+    def validate_llm_available(self) -> "Settings":
+        """If LLM is enabled, verify langchain packages are installed."""
+        if not self.LLM_DISABLED:
+            try:
+                import langchain.chat_models  # noqa: F401
+            except ImportError:
+                raise ValueError(
+                    "LLM_DISABLED=false but langchain is not installed. "
+                    "Run: uv sync --extra llm-anthropic  (or llm-openai / llm-ollama)\n"
+                    "Or set LLM_DISABLED=true in .env to run without LLM."
+                )
+        return self
 
     @model_validator(mode="after")
     def validate_key_type_settings(self) -> "Settings":
