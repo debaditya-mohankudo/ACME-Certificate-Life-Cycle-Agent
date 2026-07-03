@@ -41,11 +41,11 @@ backoff, retry, exponential, scheduler, error handler, integration, protocol, bo
 | `HTTP_CHALLENGE_PORT` | `80` | Port for the standalone HTTP-01 server |
 | `WEBROOT_PATH` | — | Required when `HTTP_CHALLENGE_MODE=webroot` |
 | `LLM_DISABLED` | `true` | Gates the renewal planner only. If `false`, the planner classifies domains via LLM (urgent/routine/skip); error_handler and reporter are always deterministic regardless of this flag |
-| `LLM_PROVIDER` | `anthropic` | LLM vendor for the planner: `anthropic` · `openai` · `ollama` |
-| `ANTHROPIC_API_KEY` | — | Claude API key (required when `LLM_PROVIDER=anthropic` and `LLM_DISABLED=false`) |
+| `LLM_PROVIDER` | `claude_cli` | LLM vendor for the planner: `claude_cli` (default — shells to `claude -p`, no API key) · `anthropic` · `openai` · `ollama` |
+| `ANTHROPIC_API_KEY` | — | Claude API key (required when `LLM_PROVIDER=anthropic` and `LLM_DISABLED=false`; not needed for `claude_cli`) |
 | `OPENAI_API_KEY` | — | OpenAI API key (required when `LLM_PROVIDER=openai` and `LLM_DISABLED=false`) |
 | `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama local server URL (used when `LLM_PROVIDER=ollama`) |
-| `LLM_MODEL_PLANNER` | `claude-haiku-4-5-20251001` | Model for renewal planning (adjust based on `LLM_PROVIDER`) |
+| `LLM_MODEL_PLANNER` | `haiku` | Model for renewal planning (adjust based on `LLM_PROVIDER` — `claude_cli`/`anthropic` accept short aliases like `haiku`/`sonnet` or full model IDs; `ollama` needs a locally pulled model tag) |
 | `SCHEDULE_TIME` | `06:00` | Daily run time (HH:MM, UTC) |
 | `MAX_RETRIES` | `3` | Per-domain retry attempts before skipping |
 | `ACME_INSECURE` | `false` | Disable TLS verification — **testing only, never in production** |
@@ -71,8 +71,9 @@ backoff, retry, exponential, scheduler, error handler, integration, protocol, bo
 
 ### LLM-Assisted Planner (`LLM_DISABLED=false`)
 
-- Requires the matching optional extra (`uv sync --extra llm-anthropic` / `llm-openai` / `llm-ollama`) and, for `anthropic`/`openai`, the corresponding API key.
-- The planner classifies each managed domain into `urgent`/`routine`/`skip` via an LLM call, then queues `urgent + routine` for renewal. Output is validated against `managed_domains` — any hallucinated domain is stripped, and any domain the LLM fails to classify is added to `routine` so nothing silently falls through.
+- **`LLM_PROVIDER=claude_cli` (default)**: shells to `claude -p --safe-mode --tools none`, reusing your existing Claude Code login. No API key, no `uv sync --extra llm-*` install — just the `claude` binary on PATH. This is the path of least setup, and was demonstrably more schema-compliant in testing than a small local Ollama model. It's also the best option for quick local testing on RAM-constrained hardware (e.g. 8GB machines): inference runs on Anthropic's infra, not your box, so there's no model to download or keep loaded in memory, unlike a local Ollama model competing with everything else running.
+- **`anthropic`/`openai`/`ollama`**: go through langchain — require the matching optional extra (`uv sync --extra llm-anthropic` / `llm-openai` / `llm-ollama`) and, for `anthropic`/`openai`, the corresponding API key.
+- The planner classifies each managed domain into `urgent`/`routine`/`skip` via an LLM call, then queues `urgent + routine` for renewal. Output is validated against `managed_domains` — any hallucinated domain is stripped, any non-string/malformed item is dropped (a small model returning `{"domain": "x"}` objects instead of plain strings won't crash the node), markdown code fences wrapping the JSON are stripped before parsing, and any domain the LLM fails to classify is added to `routine` so nothing silently falls through.
 - `error_handler`/`reporter` remain deterministic even with this enabled.
 
 ### Use Cases

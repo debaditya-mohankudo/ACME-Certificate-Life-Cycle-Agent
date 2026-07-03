@@ -1,7 +1,11 @@
-"""Tests for llm/factory.py registry pattern."""
+"""Tests for llm/factory.py registry pattern and the claude_cli provider."""
+import json
+import subprocess
+from unittest.mock import MagicMock, patch
+
 import pytest
 
-from llm.factory import _llm_kwargs_registry
+from llm.factory import ClaudeCLIChatModel, _llm_kwargs_registry, make_llm
 
 
 class TestLlmKwargsRegistry:
@@ -128,3 +132,92 @@ class TestLlmKwargsRegistry:
                 max_tokens=1024,
             )
             assert kwargs["base_url"] == base_url
+
+
+class TestClaudeCLIChatModel:
+    """Test ClaudeCLIChatModel — the default, no-API-key LLM provider."""
+
+    def _mock_completed_process(self, result_text: str, is_error: bool = False, returncode: int = 0):
+        payload = {"result": result_text, "is_error": is_error}
+        return subprocess.CompletedProcess(
+            args=[], returncode=returncode, stdout=json.dumps(payload), stderr="",
+        )
+
+    def test_requires_claude_binary_on_path(self):
+        with patch("llm.factory.shutil.which", return_value=None):
+            with pytest.raises(RuntimeError, match="claude.*binary not found"):
+                ClaudeCLIChatModel()
+
+    def test_invoke_builds_expected_command(self):
+        with patch("llm.factory.shutil.which", return_value="/usr/local/bin/claude"):
+            model = ClaudeCLIChatModel(model="haiku")
+
+        with patch("llm.factory.subprocess.run") as mock_run:
+            mock_run.return_value = self._mock_completed_process("ok")
+            from langchain_core.messages import HumanMessage, SystemMessage
+            model.invoke([SystemMessage(content="be terse"), HumanMessage(content="hello")])
+
+        cmd = mock_run.call_args.args[0]
+        assert cmd[0] == "/usr/local/bin/claude"
+        assert "-p" in cmd
+        assert "--safe-mode" in cmd
+        assert "--tools" in cmd and cmd[cmd.index("--tools") + 1] == "none"
+        assert "--model" in cmd and cmd[cmd.index("--model") + 1] == "haiku"
+        assert "--append-system-prompt" in cmd and cmd[cmd.index("--append-system-prompt") + 1] == "be terse"
+        assert mock_run.call_args.kwargs["input"] == "hello"
+
+    def test_invoke_returns_response_with_content_attribute(self):
+        with patch("llm.factory.shutil.which", return_value="/usr/local/bin/claude"):
+            model = ClaudeCLIChatModel()
+
+        with patch("llm.factory.subprocess.run") as mock_run:
+            mock_run.return_value = self._mock_completed_process('{"urgent": ["a.com"]}')
+            from langchain_core.messages import HumanMessage
+            response = model.invoke([HumanMessage(content="classify")])
+
+        assert response.content == '{"urgent": ["a.com"]}'
+
+    def test_invoke_raises_on_nonzero_exit(self):
+        with patch("llm.factory.shutil.which", return_value="/usr/local/bin/claude"):
+            model = ClaudeCLIChatModel()
+
+        with patch("llm.factory.subprocess.run") as mock_run:
+            mock_run.return_value = subprocess.CompletedProcess(
+                args=[], returncode=1, stdout="", stderr="boom",
+            )
+            from langchain_core.messages import HumanMessage
+            with pytest.raises(RuntimeError, match="claude CLI exited 1"):
+                model.invoke([HumanMessage(content="x")])
+
+    def test_invoke_raises_on_is_error_flag(self):
+        with patch("llm.factory.shutil.which", return_value="/usr/local/bin/claude"):
+            model = ClaudeCLIChatModel()
+
+        with patch("llm.factory.subprocess.run") as mock_run:
+            mock_run.return_value = self._mock_completed_process("refused", is_error=True)
+            from langchain_core.messages import HumanMessage
+            with pytest.raises(RuntimeError, match="claude CLI reported an error"):
+                model.invoke([HumanMessage(content="x")])
+
+
+class TestMakeLLMClaudeCLIRouting:
+    """make_llm() must route claude_cli without touching langchain at all."""
+
+    def test_make_llm_routes_to_claude_cli_without_langchain(self):
+        with patch("llm.factory.settings") as mock_settings:
+            mock_settings.LLM_PROVIDER = "claude_cli"
+            with patch("llm.factory._LANGCHAIN_AVAILABLE", False):
+                with patch("llm.factory.shutil.which", return_value="/usr/local/bin/claude"):
+                    result = make_llm(model="haiku", max_tokens=512)
+
+        assert isinstance(result, ClaudeCLIChatModel)
+
+    def test_make_llm_claude_cli_needs_no_api_key(self):
+        with patch("llm.factory.settings") as mock_settings:
+            mock_settings.LLM_PROVIDER = "claude_cli"
+            mock_settings.ANTHROPIC_API_KEY = ""
+            mock_settings.OPENAI_API_KEY = ""
+            with patch("llm.factory.shutil.which", return_value="/usr/local/bin/claude"):
+                # Should not raise, unlike the anthropic/openai branches which
+                # require an API key.
+                make_llm(model="haiku", max_tokens=512)

@@ -198,7 +198,7 @@ uv run python scripts/extract_concepts.py
 
 Shells out to `claude -p` (reuses your existing Claude Code login — no `ANTHROPIC_API_KEY` needed) to do a one-shot architectural analysis of the core modules (`config.py`, `main.py`, `mcp_server.py`, `agent/graph.py`, `agent/revocation_graph.py`, `agent/state.py`, `llm/factory.py`, and every `agent/nodes/*.py`), writing `name`/`module`/`description`/`invariants`/`contracts`/`confidence`/`evidence` per concept.
 
-To re-seed after major refactors, delete `concept_store/concepts.json` and re-run the seed command.
+To re-seed after major refactors, **delete `concept_store/concepts.json` first, then re-run the seed command** — never re-run on top of an existing file. Concept slugs are LLM-chosen per run and not stable across calls, so re-seeding without deleting first leaves near-duplicate entries under different names (e.g. `domain-loop-routing` and `domain-loop-routing-logic` both surviving) instead of cleanly replacing stale ones.
 
 ---
 

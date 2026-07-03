@@ -99,12 +99,15 @@ class Settings(BaseSettings):
     GOOGLE_CLOUD_DNS_ZONE_NAME: str = ""     # GCP managed zone name
 
     # ── LLM (renewal planner only — error_handler/reporter remain deterministic) ──
-    LLM_DISABLED: bool = True   # Default: deterministic planner; set False + install llm extra to enable LLM
-    LLM_PROVIDER: Literal["anthropic", "openai", "ollama"] = "anthropic"
+    LLM_DISABLED: bool = True   # Default: deterministic planner; set False to enable LLM
+    # claude_cli shells to `claude -p --safe-mode --tools none` (reuses the caller's
+    # existing Claude Code login) — no API key or `uv sync --extra llm-*` needed,
+    # which is why it's the default once LLM_DISABLED=False.
+    LLM_PROVIDER: Literal["anthropic", "openai", "ollama", "claude_cli"] = "claude_cli"
     ANTHROPIC_API_KEY: str = ""
     OPENAI_API_KEY: str = ""
     OLLAMA_BASE_URL: str = "http://localhost:11434"
-    LLM_MODEL_PLANNER: str = "claude-haiku-4-5-20251001"
+    LLM_MODEL_PLANNER: str = "haiku"
 
     # ── Scheduling ─────────────────────────────────────────────────────────
     SCHEDULE_TIME: str = "06:00"
