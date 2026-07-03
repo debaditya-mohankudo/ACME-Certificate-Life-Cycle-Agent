@@ -186,6 +186,22 @@ tests/  doc/
 
 ---
 
+# 🗂 Concept Store
+
+Architectural concepts for this repo are stored in `concept_store/concepts.json`.
+
+**Seed (run once):**
+
+```bash
+uv run python scripts/extract_concepts.py
+```
+
+Shells out to `claude -p` (reuses your existing Claude Code login — no `ANTHROPIC_API_KEY` needed) to do a one-shot architectural analysis of the core modules (`config.py`, `main.py`, `mcp_server.py`, `agent/graph.py`, `agent/revocation_graph.py`, `agent/state.py`, `llm/factory.py`, and every `agent/nodes/*.py`), writing `name`/`module`/`description`/`invariants`/`contracts`/`confidence`/`evidence` per concept.
+
+To re-seed after major refactors, delete `concept_store/concepts.json` and re-run the seed command.
+
+---
+
 # 🧭 Architectural Discipline
 
 ## Sequential Processing (Intentional)
