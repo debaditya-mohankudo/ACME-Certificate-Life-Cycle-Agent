@@ -29,7 +29,7 @@ backoff, retry, exponential, scheduler, error handler, integration, protocol, bo
 
 | Variable | Default | Description |
 |---|---|---|
-| `CERT_ISSUANCE_MODE` | `acme` | `acme` or `spiffe` — strict either/or, picks which issuance flow runs. One running instance issues either ACME certs or SPIFFE SVIDs, never both; run two separate instances/configs if you need both. Setting fields from the wrong group (e.g. `MANAGED_DOMAINS` while `spiffe`) is rejected at config load. See [DESIGN_SPIFFE_SVID_EXTENSION.md](DESIGN_SPIFFE_SVID_EXTENSION.md) *(pending)*. |
+| `CERT_ISSUANCE_MODE` | `acme` | `acme` or `spiffe` — strict either/or, picks which issuance flow runs. One running instance issues either ACME certs or SPIFFE SVIDs, never both; run two separate instances/configs if you need both. Setting fields from the wrong group (e.g. `MANAGED_DOMAINS` while `spiffe`) is rejected at config load. `spiffe` mode requires `uv sync --extra spiffe` (the `spiffe` PyPI package) — `spiffe_attestor` degrades to a clean per-domain failure, not a crash, if it's missing. See [DESIGN_SPIFFE_SVID_EXTENSION.md](DESIGN_SPIFFE_SVID_EXTENSION.md) *(pending)* and [SPIRE_TESTING_SERVER.md](SPIRE_TESTING_SERVER.md). |
 | `CA_PROVIDER` | `digicert` | *(acme mode only)* CA to use: `digicert` · `letsencrypt` · `letsencrypt_staging` · `zerossl` · `sectigo` · `custom`. For named providers the config is authoritative and X.509 issuer detection is skipped. For `custom`, the scanner detects the issuing CA from existing certs and warns on mismatch (advisory only). |
 | `ACME_EAB_KEY_ID` | — | EAB key identifier (DigiCert only) |
 | `ACME_EAB_HMAC_KEY` | — | Base64url-encoded HMAC key (DigiCert only) |
