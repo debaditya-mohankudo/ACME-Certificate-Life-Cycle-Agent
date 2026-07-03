@@ -39,6 +39,7 @@ See [CI_TEST_COVERAGE.md](doc/CI_TEST_COVERAGE.md) for the full per-file breakdo
 | Usage | [USAGE.md](doc/USAGE.md) |
 | MCP server usage | [MCP_SERVER.md](doc/MCP_SERVER.md) |
 | Pebble testing server | [PEBBLE_TESTING_SERVER.md](doc/PEBBLE_TESTING_SERVER.md) |
+| SPIFFE SVID extension (design + SPIRE test harness) | [DESIGN_SPIFFE_SVID_EXTENSION.md](doc/DESIGN_SPIFFE_SVID_EXTENSION.md) · [SPIRE_TESTING_SERVER.md](doc/SPIRE_TESTING_SERVER.md) |
 | Configuration reference | [CONFIGURATION.md](doc/CONFIGURATION.md) |
 | Certificate revocation | [REVOCATION_IMPLEMENTATION.md](doc/REVOCATION_IMPLEMENTATION.md) |
 | Certificate storage layout | [CERTIFICATE_STORAGE.md](doc/CERTIFICATE_STORAGE.md) |
