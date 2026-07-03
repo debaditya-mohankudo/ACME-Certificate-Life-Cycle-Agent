@@ -87,6 +87,23 @@ def test_fetch_failure_is_terminal_not_a_crash(tmp_path: Path):
     mock_client.close.assert_called_once()
 
 
+def test_invalid_socket_path_is_terminal_not_a_crash(tmp_path: Path):
+    """WorkloadApiClient's constructor (not just fetch_x509_svid) can raise —
+    e.g. a misconfigured or missing SPIRE_AGENT_SOCKET_PATH. This must be
+    caught the same way a fetch failure is, not left to crash the graph."""
+    from spiffe.errors import ArgumentError
+
+    node = SpiffeAttestorNode()
+    with patch(
+        "agent.nodes.spiffe_attestor.WorkloadApiClient",
+        side_effect=ArgumentError("invalid socket path"),
+    ):
+        result = node.run(_base_state(cert_store_path=str(tmp_path)))
+
+    assert result["failed_renewals"] == ["spiffe://example.org/workload/demo"]
+    assert "invalid SPIRE_AGENT_SOCKET_PATH" in result["error_log"][0]
+
+
 def test_success_path_writes_privkey_and_populates_current_order(tmp_path: Path):
     cert, key = _make_self_signed_cert("workload/demo")
 

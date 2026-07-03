@@ -33,11 +33,13 @@ from logger import logger
 
 try:
     from spiffe import WorkloadApiClient
+    from spiffe.errors import ArgumentError
     from spiffe.workloadapi.errors import FetchX509SvidError
     _SPIFFE_AVAILABLE = True
 except ImportError:
     _SPIFFE_AVAILABLE = False
     WorkloadApiClient = None  # type: ignore[assignment,misc]
+    ArgumentError = Exception  # type: ignore[assignment,misc]
     FetchX509SvidError = Exception  # type: ignore[assignment,misc]
 
 
@@ -73,10 +75,16 @@ class SpiffeAttestorNode:
 
         try:
             client = WorkloadApiClient(socket_path=f"unix://{socket_path}")
-            try:
-                svid = client.fetch_x509_svid()
-            finally:
-                client.close()
+        except ArgumentError as exc:
+            error = f"spiffe_attestor: invalid SPIRE_AGENT_SOCKET_PATH ({socket_path!r}): {exc}"
+            logger.error(error)
+            return {
+                "failed_renewals": state.get("failed_renewals", []) + [spiffe_id],
+                "error_log": state.get("error_log", []) + [error],
+            }
+
+        try:
+            svid = client.fetch_x509_svid()
         except FetchX509SvidError as exc:
             error = f"spiffe_attestor: failed to fetch SVID for {spiffe_id}: {exc}"
             logger.error(error)
@@ -84,6 +92,8 @@ class SpiffeAttestorNode:
                 "failed_renewals": state.get("failed_renewals", []) + [spiffe_id],
                 "error_log": state.get("error_log", []) + [error],
             }
+        finally:
+            client.close()
 
         fetched_id = str(svid.spiffe_id)
         if fetched_id != spiffe_id:
