@@ -92,25 +92,35 @@ def renewal_router(state: AgentState) -> str:
 
 def error_action_router(state: AgentState) -> str:
     """
-    After error_handler LLM decision: parse the action from error_analysis.
+    After error_handler: route on the "retry" | "skip" | "abort" decision
+    error_handler set directly in state["error_action"] (a plain field, not
+    JSON-encoded text — error_handler.py's error_analysis is human-readable
+    prose, never machine-parseable, so this router must never re-parse it).
 
     Returns: "retry" | "skip_domain" | "abort"
     """
-    import json
+    action = state.get("error_action")
+    domain = state.get("current_domain", "unknown")
 
-    analysis = state.get("error_analysis", "")
-    try:
-        decision = json.loads(analysis)
-        action = decision.get("action", "skip")
-    except Exception:
-        action = "skip"
+    if action not in ("retry", "skip", "abort"):
+        logger.warning(
+            "error_action_router: missing or unrecognized error_action=%r for %s — defaulting to skip_domain",
+            action, domain,
+        )
+        return "skip_domain"
 
     retry_count = state.get("retry_count", 0)
     max_retries = state.get("max_retries", 3)
 
     if action == "retry" and retry_count < max_retries:
+        logger.info("error_action_router: RETRY for %s (%d/%d)", domain, retry_count, max_retries)
         return "retry"
     elif action == "abort":
+        logger.info("error_action_router: ABORT for %s", domain)
         return "abort"
     else:
+        logger.info(
+            "error_action_router: SKIP for %s (action=%s, retry_count=%d/%d)",
+            domain, action, retry_count, max_retries,
+        )
         return "skip_domain"

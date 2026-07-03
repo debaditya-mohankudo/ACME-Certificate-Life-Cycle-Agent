@@ -101,6 +101,7 @@ def revocation_initial_state(
         "messages": [],
         "renewal_plan": None,
         "error_analysis": None,
+        "error_action": None,
         "completed_renewals": [],
         "failed_renewals": [],
         "error_log": [],

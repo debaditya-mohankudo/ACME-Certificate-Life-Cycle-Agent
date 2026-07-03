@@ -260,3 +260,26 @@ def test_deterministic_function_cap():
     action, delay = _error_handler_deterministic(retry_count=10, max_retries=11, retry_delay_seconds=5)
     assert action == "retry"
     assert delay == 300
+
+
+# ─── error_action (plain field consumed directly by error_action_router) ──────
+# Regression coverage for task:06284d87 — error_action_router must never
+# re-parse error_analysis (prose, not JSON); error_handler must always also
+# set error_action as a plain string.
+
+
+def test_retry_sets_error_action():
+    result = ErrorHandlerNode().run(_base_state(retry_count=0, max_retries=3, current_order=None))
+    assert result["error_action"] == "retry"
+
+
+def test_skip_sets_error_action():
+    result = ErrorHandlerNode().run(_base_state(retry_count=3, max_retries=3, current_order=None))
+    assert result["error_action"] == "skip"
+
+
+def test_abort_sets_error_action():
+    result = ErrorHandlerNode().run(_base_state(
+        error_log=["urn:ietf:params:acme:error:unauthorized"], current_order=None,
+    ))
+    assert result["error_action"] == "abort"

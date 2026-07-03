@@ -82,7 +82,8 @@ class AgentState(TypedDict):
     # ── LLM reasoning ──────────────────────────────────────────────────────
     messages: Annotated[List[_BaseMessage], add_messages]
     renewal_plan: Optional[str]       # LLM's JSON renewal strategy
-    error_analysis: Optional[str]     # LLM's failure reasoning
+    error_analysis: Optional[str]     # Human-readable failure summary (prose, not JSON — read error_action for routing)
+    error_action: Optional[str]       # "retry" | "skip" | "abort" — set by error_handler, read directly by error_action_router
 
     # ── Progress tracking ──────────────────────────────────────────────────
     completed_renewals: List[str]

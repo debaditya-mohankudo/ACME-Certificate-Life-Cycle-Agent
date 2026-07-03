@@ -61,6 +61,7 @@ class ErrorHandlerNode:
 
         updates: dict = {
             "error_analysis": analysis,
+            "error_action": action,
             "messages": [],
         }
 

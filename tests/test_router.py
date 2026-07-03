@@ -5,8 +5,6 @@ All functions are pure state-dict → str (or dict) — no mocking required.
 """
 from __future__ import annotations
 
-import json
-
 from agent.nodes.router import (
     PickNextDomainNode,
     challenge_router,
@@ -118,11 +116,15 @@ def test_renewal_router_missing_key_returns_no_renewals():
 
 
 # ─── error_action_router ──────────────────────────────────────────────────────
+# error_action_router reads state["error_action"] directly (a plain string set
+# by error_handler.py) — it must never re-parse state["error_analysis"], which
+# is human-readable prose, not JSON (this was the task:06284d87 bug: routing
+# always fell through to skip_domain because it tried json.loads() on prose).
 
 
 def test_error_action_router_retry_under_limit():
     state = {
-        "error_analysis": json.dumps({"action": "retry"}),
+        "error_action": "retry",
         "retry_count": 1,
         "max_retries": 3,
     }
@@ -131,7 +133,7 @@ def test_error_action_router_retry_under_limit():
 
 def test_error_action_router_retry_at_limit_falls_to_skip():
     state = {
-        "error_analysis": json.dumps({"action": "retry"}),
+        "error_action": "retry",
         "retry_count": 3,
         "max_retries": 3,
     }
@@ -140,7 +142,7 @@ def test_error_action_router_retry_at_limit_falls_to_skip():
 
 def test_error_action_router_retry_exceeds_limit_falls_to_skip():
     state = {
-        "error_analysis": json.dumps({"action": "retry"}),
+        "error_action": "retry",
         "retry_count": 5,
         "max_retries": 3,
     }
@@ -149,7 +151,7 @@ def test_error_action_router_retry_exceeds_limit_falls_to_skip():
 
 def test_error_action_router_abort():
     state = {
-        "error_analysis": json.dumps({"action": "abort"}),
+        "error_action": "abort",
         "retry_count": 0,
         "max_retries": 3,
     }
@@ -158,7 +160,7 @@ def test_error_action_router_abort():
 
 def test_error_action_router_skip():
     state = {
-        "error_analysis": json.dumps({"action": "skip"}),
+        "error_action": "skip",
         "retry_count": 0,
         "max_retries": 3,
     }
@@ -167,37 +169,89 @@ def test_error_action_router_skip():
 
 def test_error_action_router_unknown_action_falls_to_skip():
     state = {
-        "error_analysis": json.dumps({"action": "explode"}),
+        "error_action": "explode",
         "retry_count": 0,
         "max_retries": 3,
     }
     assert error_action_router(state) == "skip_domain"
 
 
-def test_error_action_router_malformed_json_falls_to_skip():
-    state = {
-        "error_analysis": "not-json-at-all",
-        "retry_count": 0,
-        "max_retries": 3,
-    }
-    assert error_action_router(state) == "skip_domain"
-
-
-def test_error_action_router_empty_analysis_falls_to_skip():
-    state = {
-        "error_analysis": "",
-        "retry_count": 0,
-        "max_retries": 3,
-    }
-    assert error_action_router(state) == "skip_domain"
-
-
-def test_error_action_router_missing_analysis_defaults_skip():
+def test_error_action_router_missing_action_defaults_skip():
     state = {"retry_count": 0, "max_retries": 3}
+    assert error_action_router(state) == "skip_domain"
+
+
+def test_error_action_router_none_action_defaults_skip():
+    state = {"error_action": None, "retry_count": 0, "max_retries": 3}
     assert error_action_router(state) == "skip_domain"
 
 
 def test_error_action_router_uses_default_max_retries_when_missing():
     """Defaults: max_retries=3, retry_count=0 → retry allowed."""
-    state = {"error_analysis": json.dumps({"action": "retry"})}
+    state = {"error_action": "retry"}
     assert error_action_router(state) == "retry"
+
+
+def test_error_action_router_ignores_stale_error_analysis_text():
+    """error_action_router must route on error_action, never re-parse
+    error_analysis (which is prose, not JSON) — regression test for
+    task:06284d87."""
+    state = {
+        "error_action": "retry",
+        "error_analysis": "Deterministic error handler:\nDomain: api.example.com\nAction: RETRY",
+        "retry_count": 0,
+        "max_retries": 3,
+    }
+    assert error_action_router(state) == "retry"
+
+
+# ─── Integration: error_handler → error_action_router ─────────────────────────
+# The missing test category that let task:06284d87 through — both units were
+# tested in isolation but never wired together against real output.
+
+
+def _base_error_state(**overrides) -> dict:
+    state = {
+        "current_domain": "api.example.com",
+        "error_log": ["some transient failure"],
+        "retry_count": 0,
+        "max_retries": 3,
+        "retry_delay_seconds": 5,
+        "pending_renewals": [],
+        "failed_renewals": [],
+    }
+    state.update(overrides)
+    return state
+
+
+def test_error_handler_output_routes_to_retry():
+    from agent.nodes.error_handler import error_handler
+
+    state = _base_error_state(error_log=["connection timeout"])
+    result = error_handler(state)
+    routed = error_action_router({**state, **result})
+
+    assert result["error_action"] == "retry"
+    assert routed == "retry"
+
+
+def test_error_handler_output_routes_to_skip_after_max_retries():
+    from agent.nodes.error_handler import error_handler
+
+    state = _base_error_state(error_log=["connection timeout"], retry_count=3, max_retries=3)
+    result = error_handler(state)
+    routed = error_action_router({**state, **result})
+
+    assert result["error_action"] == "skip"
+    assert routed == "skip_domain"
+
+
+def test_error_handler_output_routes_to_abort_on_fatal_error():
+    from agent.nodes.error_handler import error_handler
+
+    state = _base_error_state(error_log=["urn:ietf:params:acme:error:unauthorized"])
+    result = error_handler(state)
+    routed = error_action_router({**state, **result})
+
+    assert result["error_action"] == "abort"
+    assert routed == "abort"
