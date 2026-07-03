@@ -64,7 +64,7 @@ Impact:
 uv run pytest -v -n auto -m "not integration"
 ```
 
-**566 tests, 0 skips, no external services required.**
+**586 tests, 0 skips, no external services required.**
 
 Parallel execution via xdist (8 concurrent workers on typical GitHub runners).
 Unit tests are isolated and mocked — safe to parallelize.

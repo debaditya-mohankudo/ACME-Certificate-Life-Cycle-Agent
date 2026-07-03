@@ -2,6 +2,8 @@
 
 An intelligent, agentic TLS certificate manager built on **LangGraph** and **Claude**. It monitors certificate expiry across multiple domains, uses an LLM to plan and prioritize renewals, executes the full **ACME RFC 8555** flow against **any RFC 8555-compliant CA** (DigiCert, Let's Encrypt, or custom), and stores issued certificates as PEM files on the local filesystem — all on a configurable daily schedule.
 
+The lifecycle logic (monitor → plan → issue → renew → revoke) is protocol-agnostic — ACME is one issuance backend. Set `CERT_ISSUANCE_MODE=spiffe` and the same agent issues **SPIFFE SVIDs** (workload identity certs) via a local **SPIRE** deployment instead — attestation-based auth, no HTTP-01/DNS-01 challenge, no public CA — for agentic and service-mesh environments. Strictly either/or per running instance; see [DESIGN_SPIFFE_SVID_EXTENSION.md](doc/DESIGN_SPIFFE_SVID_EXTENSION.md).
+
 **Deterministic mode** (`LLM_DISABLED=true`): No LLM API calls; fully auditable renewal logic for air-gapped installations and cost optimization.
 
 Designed for the coming **47-day TLS mandate (2029)**, where automated renewal is not optional.
@@ -11,16 +13,16 @@ Designed for the coming **47-day TLS mandate (2029)**, where automated renewal i
 ## Quality & Testing
 
 [![Coverage](https://img.shields.io/badge/coverage-92%25-brightgreen?style=for-the-badge&logo=pytest&logoColor=white)](doc/CI_TEST_COVERAGE.md)
-[![Unit Tests](https://img.shields.io/badge/unit_tests-566_passing-brightgreen?style=for-the-badge&logo=pytest&logoColor=white)](doc/CI_TEST_COVERAGE.md)
-[![Integration Tests](https://img.shields.io/badge/integration_tests-9_pebble-blue?style=for-the-badge&logo=docker&logoColor=white)](doc/CI_TEST_COVERAGE.md)
+[![Unit Tests](https://img.shields.io/badge/unit_tests-586_passing-brightgreen?style=for-the-badge&logo=pytest&logoColor=white)](doc/CI_TEST_COVERAGE.md)
+[![Integration Tests](https://img.shields.io/badge/integration_tests-9_pebble_%2B_3_spire-blue?style=for-the-badge&logo=docker&logoColor=white)](doc/CI_TEST_COVERAGE.md)
 [![CI Runtime](https://img.shields.io/badge/CI_runtime-~9s-blue?style=for-the-badge&logo=githubactions&logoColor=white)](doc/CI_TEST_COVERAGE.md)
 
 | Metric | Value |
 |---|---|
 | Line coverage | **92%** — 6,338 / 6,884 statements *(not recomputed this pass — see [CI_TEST_COVERAGE.md](doc/CI_TEST_COVERAGE.md))* |
-| Unit tests (CI) | 566 · parallel via `xdist` · ~9 s |
-| Integration tests | 9 against Pebble ACME mock server |
-| Total | 575 tests |
+| Unit tests (CI) | 586 · parallel via `xdist` · ~9 s |
+| Integration tests | 9 against Pebble ACME mock server + 3 against SPIRE |
+| Total | 598 tests |
 | Modules at 100% | `router` · `planner` · `registry` · `state` · `graph` · `crypto` · `prompts` · `revocation_graph` |
 
 Coverage lifts from targeted tests: `router` 60%→**100%** · `storage` 23%→**96%** · `error_handler` 26%→**98%** · `finalizer` 22%→**88%**
