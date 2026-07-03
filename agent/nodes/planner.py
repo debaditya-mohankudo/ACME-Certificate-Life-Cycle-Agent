@@ -156,23 +156,46 @@ def _renewal_planner_deterministic(cert_records, managed_domains, threshold_days
     return no_cert + expiring_soon_domains
 
 
+def _strip_markdown_fences(raw: str) -> str:
+    """Some providers (observed with claude -p) wrap JSON output in a
+    ```json ... ``` fence despite being told not to. Strip it before
+    parsing rather than letting json.loads() fail on it."""
+    text = raw.strip()
+    if text.startswith("```"):
+        text = text.split("\n", 1)[1] if "\n" in text else text[3:]
+        if text.endswith("```"):
+            text = text.rsplit("```", 1)[0]
+        text = text.strip()
+    return text
+
+
 def _parse_and_validate(raw: str, managed_domains: set[str]) -> dict[str, Any]:
     """
     Parse LLM JSON output and validate that all domains are from managed_domains.
     Falls back to a safe default on any parse failure.
     """
     try:
-        plan = json.loads(raw)
+        plan = json.loads(_strip_markdown_fences(raw))
     except json.JSONDecodeError:
         logger.warning("Planner returned invalid JSON — falling back to renew all")
         return {"urgent": [], "routine": list(managed_domains), "skip": [], "notes": "JSON parse failed"}
 
-    # Validate: strip any hallucinated domains not in the managed list
+    # Validate: strip any hallucinated domains not in the managed list, and
+    # any malformed (non-string) entries — a small/less-compliant LLM may
+    # return well-formed JSON with the wrong item shape (e.g. {"domain": "x"}
+    # objects instead of plain domain strings), which must degrade gracefully
+    # rather than crash the whole node.
     for key in ("urgent", "routine", "skip"):
         original = plan.get(key, [])
-        validated = [d for d in original if d in managed_domains]
-        if len(validated) != len(original):
-            removed = set(original) - set(validated)
+        malformed = [d for d in original if not isinstance(d, str)]
+        if malformed:
+            logger.warning(
+                "Planner returned non-string domain entries in %r — dropping: %s", key, malformed
+            )
+        strings = [d for d in original if isinstance(d, str)]
+        validated = [d for d in strings if d in managed_domains]
+        if len(validated) != len(strings):
+            removed = set(strings) - set(validated)
             logger.warning(
                 "Planner hallucinated domains — removing: %s", removed
             )

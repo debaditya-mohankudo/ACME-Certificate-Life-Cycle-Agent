@@ -76,6 +76,21 @@ class TestParseAndValidate:
         assert result["skip"] == []
         assert result["notes"] == "JSON parse failed"
 
+    def test_markdown_fenced_json_is_parsed_not_fallen_back(self):
+        """Regression for task:df13bec8 — some providers (observed with
+        claude -p) wrap JSON output in ```json ... ``` fences despite being
+        told not to. This must be stripped and parsed, not treated as a
+        parse failure."""
+        raw = "```json\n" + json.dumps({
+            "urgent": [DOMAIN_A],
+            "routine": [DOMAIN_B],
+            "skip": [],
+        }) + "\n```"
+        result = _parse_and_validate(raw, MANAGED)
+
+        assert result["urgent"] == [DOMAIN_A]
+        assert result["routine"] == [DOMAIN_B]
+
     def test_hallucinated_domain_in_urgent_stripped(self):
         """Hallucinated domain in urgent bucket is removed."""
         raw = json.dumps({
@@ -173,6 +188,38 @@ class TestParseAndValidate:
         assert set(result["routine"]) == MANAGED
         assert result["urgent"] == []
         assert result["skip"] == []
+
+    def test_malformed_object_item_does_not_crash(self):
+        """Regression for task:df13bec8 — a small/less-compliant LLM (observed
+        with qwen2.5:3b) can return well-formed JSON with the wrong item shape,
+        e.g. {"domain": "..."} objects instead of plain domain strings. This
+        must degrade gracefully (drop + backfill), never crash with
+        TypeError: unhashable type: 'dict'."""
+        raw = json.dumps({
+            "urgent": [{"domain": DOMAIN_A}],
+            "routine": [],
+            "skip": [],
+        })
+        result = _parse_and_validate(raw, MANAGED)
+
+        # The malformed entry is dropped, not crashed on...
+        assert result["urgent"] == []
+        # ...and the domain it named still ends up classified via the
+        # missing-domain backfill, not silently dropped.
+        assert set(result["routine"]) == MANAGED
+
+    def test_mixed_valid_and_malformed_items_in_same_bucket(self):
+        """A malformed item alongside valid ones only drops the malformed
+        one — the valid domain string survives."""
+        raw = json.dumps({
+            "urgent": [DOMAIN_A, {"domain": DOMAIN_B}],
+            "routine": [],
+            "skip": [],
+        })
+        result = _parse_and_validate(raw, MANAGED)
+
+        assert result["urgent"] == [DOMAIN_A]
+        assert set(result["routine"]) == {DOMAIN_B}
 
 
 # ── Tests: renewal_planner node ────────────────────────────────────────────
