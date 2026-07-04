@@ -22,14 +22,30 @@ class ConceptStore:
         evidence    — list[str] of "file:line" references
         last_validated — ISO timestamp
         created_at     — ISO timestamp
+
+    On-disk shape is {"meta": {...}, "concepts": {name: {...}}}. `meta` holds
+    store-level bookkeeping (e.g. the git commit the concepts were last
+    extracted against) separate from the concept records themselves —
+    without this, there's no way to tell whether a concept is stale relative
+    to current HEAD, only when it was last touched in wall-clock time.
+
+    Transparently reads the older flat {name: {...}} format (no wrapping
+    "meta"/"concepts" keys) for backward compatibility; always writes the
+    new nested shape on save().
     """
 
     def __init__(self, path: Path) -> None:
         self._path = Path(path)
         self._data: dict[str, dict] = {}
+        self._meta: dict = {}
         if self._path.exists():
             text = self._path.read_text(encoding="utf-8").strip()
-            self._data = json.loads(text) if text else {}
+            raw = json.loads(text) if text else {}
+            if "concepts" in raw or "meta" in raw:
+                self._data = raw.get("concepts", {})
+                self._meta = raw.get("meta", {})
+            else:
+                self._data = raw  # legacy flat format
 
     # ------------------------------------------------------------------
     # Writes
@@ -58,13 +74,21 @@ class ConceptStore:
 
     def save(self) -> None:
         self._path.write_text(
-            json.dumps(self._data, indent=2, ensure_ascii=False),
+            json.dumps({"meta": self._meta, "concepts": self._data}, indent=2, ensure_ascii=False),
             encoding="utf-8",
         )
+
+    def set_meta(self, **fields) -> None:
+        """Merge fields into store-level metadata (e.g. commit=<sha>, extracted_at=<iso>) and persist."""
+        self._meta.update(fields)
+        self.save()
 
     # ------------------------------------------------------------------
     # Reads
     # ------------------------------------------------------------------
+
+    def get_meta(self) -> dict:
+        return dict(self._meta)
 
     def get(self, name: str) -> Optional[dict]:
         return self._data.get(name)

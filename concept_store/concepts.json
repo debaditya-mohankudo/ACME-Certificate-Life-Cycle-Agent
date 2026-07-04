@@ -1,592 +1,599 @@
 {
-  "cert-issuance-mode-strict-exclusivity": {
-    "name": "cert-issuance-mode-strict-exclusivity",
-    "module": "config.py",
-    "description": "Settings enforces that a single instance runs either ACME or SPIFFE issuance, never both, via CERT_ISSUANCE_MODE and cross-validating that the other mode's fields are unset/default.",
-    "invariants": [
-      "CERT_ISSUANCE_MODE is either 'acme' or 'spiffe', never both active",
-      "In acme mode, SPIRE_AGENT_SOCKET_PATH must remain default and SPIFFE_TRUST_DOMAIN/MANAGED_SPIFFE_IDS must be empty",
-      "In spiffe mode, MANAGED_DOMAINS must be empty and SPIFFE_TRUST_DOMAIN must be set"
-    ],
-    "contracts": [
-      "Construction-time validation rejects misconfigured mode/field combinations before any network call"
-    ],
-    "confidence": 0.95,
-    "evidence": [
-      "config.py:63",
-      "config.py:204-222"
-    ],
-    "last_validated": "2026-07-03T22:48:21.984690+00:00",
-    "created_at": "2026-07-03T22:48:21.984690+00:00"
+  "meta": {
+    "commit": "",
+    "extracted_at": "",
+    "note": "migrated to meta/concepts format 2026-07-04; original extraction commit unknown"
   },
-  "csv-fallback-settings-source": {
-    "name": "csv-fallback-settings-source",
-    "module": "config.py",
-    "description": "Custom pydantic-settings sources catch JSON-parse failures on List[str] fields and pass the raw string through so field_validators can split on commas, supporting comma-separated env vars.",
-    "invariants": [
-      "Only ValueError from prepare_field_value is swallowed, not other exceptions"
-    ],
-    "contracts": [
-      "MANAGED_DOMAINS and MANAGED_SPIFFE_IDS accept either JSON arrays or comma-separated strings from env/.env"
-    ],
-    "confidence": 0.9,
-    "evidence": [
-      "config.py:26-45",
-      "config.py:150-163"
-    ],
-    "last_validated": "2026-07-03T22:48:21.987760+00:00",
-    "created_at": "2026-07-03T22:48:21.987760+00:00"
-  },
-  "eab-all-or-nothing-validation": {
-    "name": "eab-all-or-nothing-validation",
-    "module": "config.py",
-    "description": "For CA providers requiring External Account Binding (digicert, zerossl, sectigo), both ACME_EAB_KEY_ID and ACME_EAB_HMAC_KEY must be set together or neither.",
-    "invariants": [
-      "key_set == hmac_set for EAB-required providers"
-    ],
-    "contracts": [
-      "Fails fast at settings construction rather than at first ACME network call"
-    ],
-    "confidence": 0.9,
-    "evidence": [
-      "config.py:249-262"
-    ],
-    "last_validated": "2026-07-03T22:48:21.988009+00:00",
-    "created_at": "2026-07-03T22:48:21.988009+00:00"
-  },
-  "acme-directory-preset-resolution": {
-    "name": "acme-directory-preset-resolution",
-    "module": "config.py",
-    "description": "Resolves ACME_DIRECTORY_URL from a CA_PROVIDER preset map unless CA_PROVIDER is 'custom', in which case ACME_DIRECTORY_URL must be explicitly provided; also warns on deprecated DIGICERT_* env vars.",
-    "invariants": [
-      "ACME_DIRECTORY_URL is always resolved by the time log_resolved_settings runs (declaration order dependency)"
-    ],
-    "contracts": [
-      "Callers can rely on settings.ACME_DIRECTORY_URL being populated after Settings construction in acme mode"
-    ],
-    "confidence": 0.9,
-    "evidence": [
-      "config.py:283-306"
-    ],
-    "last_validated": "2026-07-03T22:48:21.988240+00:00",
-    "created_at": "2026-07-03T22:48:21.988240+00:00"
-  },
-  "cli-readonly-query-commands": {
-    "name": "cli-readonly-query-commands",
-    "module": "main.py",
-    "description": "CLI entry point distinguishes state-changing commands (--once, --schedule, --revoke-cert) from strictly read-only query commands (--expiring-in-30-days, --domain-status) that never issue/renew/revoke certs.",
-    "invariants": [
-      "--expiring-in-30-days and --domain-status never mutate cert store or contact ACME/SPIRE servers"
-    ],
-    "contracts": [
-      "Query commands are safe to call repeatedly with no side effects"
-    ],
-    "confidence": 0.85,
-    "evidence": [
-      "main.py:16-22",
-      "main.py:170-207",
-      "main.py:236-292"
-    ],
-    "last_validated": "2026-07-03T22:48:21.988493+00:00",
-    "created_at": "2026-07-03T22:48:21.988493+00:00"
-  },
-  "cli-command-registry-dispatch": {
-    "name": "cli-command-registry-dispatch",
-    "module": "main.py",
-    "description": "main() builds a dict mapping action name to (is_selected, handler) and executes the first matching handler, replacing an if/elif chain with a declarative registry.",
-    "invariants": [
-      "Exactly one handler executes per invocation (first match wins per dict iteration order)",
-      "At least one action flag must be selected or help is printed and process exits 1"
-    ],
-    "contracts": [
-      "Adding a new CLI action requires registering it in command_registry"
-    ],
-    "confidence": 0.8,
-    "evidence": [
-      "main.py:388-431",
-      "main.py:433-437"
-    ],
-    "last_validated": "2026-07-03T22:48:21.988787+00:00",
-    "created_at": "2026-07-03T22:48:21.988787+00:00"
-  },
-  "runtime-settings-override-singleton-swap": {
-    "name": "runtime-settings-override-singleton-swap",
-    "module": "main.py",
-    "description": "apply_runtime_settings_overrides replaces the module-level config.settings singleton with a new Settings object built from CLI overrides (--ca-provider/--acme-directory-url), affecting the whole process for that run.",
-    "invariants": [
-      "Override only occurs if at least one of ca_provider/acme_directory_url is provided"
-    ],
-    "contracts": [
-      "Downstream code reading config.settings sees the overridden values for the remainder of the process"
-    ],
-    "confidence": 0.85,
-    "evidence": [
-      "main.py:317-349"
-    ],
-    "last_validated": "2026-07-03T22:48:21.989068+00:00",
-    "created_at": "2026-07-03T22:48:21.989068+00:00"
-  },
-  "mcp-tool-serialization-lock": {
-    "name": "mcp-tool-serialization-lock",
-    "module": "mcp_server.py",
-    "description": "State-mutating MCP tools (renew_once, revoke_cert, generate_test_cert, health) acquire a process-wide asyncio.Lock via _operation_lock(required=True) to serialize execution against the shared config.settings singleton override mechanism; read-only tools use required=False and skip locking.",
-    "invariants": [
-      "Only one mutating MCP tool call touches config.settings/global state at a time",
-      "Read-only tools never block on or require the lock"
-    ],
-    "contracts": [
-      "Concurrent MCP tool calls cannot interleave settings overrides mid-operation"
-    ],
-    "confidence": 0.85,
-    "evidence": [
-      "mcp_server.py:47-48",
-      "mcp_server.py:146-155",
-      "mcp_server.py:333-341"
-    ],
-    "last_validated": "2026-07-03T22:48:21.989314+00:00",
-    "created_at": "2026-07-03T22:48:21.989314+00:00"
-  },
-  "mcp-temporary-settings-override-contextmanager": {
-    "name": "mcp-temporary-settings-override-contextmanager",
-    "module": "mcp_server.py",
-    "description": "_temporary_settings_override swaps config.settings for the duration of a single tool call and restores the original in a finally block, enabling per-call CA overrides without permanently mutating global state (unlike main.py's CLI override).",
-    "invariants": [
-      "config.settings is always restored to its prior value after the tool call, even on exception"
-    ],
-    "contracts": [
-      "Callers can pass per-request settings_override without affecting subsequent MCP calls"
-    ],
-    "confidence": 0.9,
-    "evidence": [
-      "mcp_server.py:83-96"
-    ],
-    "last_validated": "2026-07-03T22:48:21.989560+00:00",
-    "created_at": "2026-07-03T22:48:21.989560+00:00"
-  },
-  "mcp-ca-input-mode-explicit-resolution": {
-    "name": "mcp-ca-input-mode-explicit-resolution",
-    "module": "mcp_server.py",
-    "description": "_resolve_ca_inputs requires explicit ca_input_mode ('config' or 'custom') rather than inferring from optional params, validating ca_provider against known choices and URL scheme when in 'custom' mode.",
-    "invariants": [
-      "ca_input_mode must be 'config' or 'custom'",
-      "In 'custom' mode both ca_provider and acme_directory_url are required and validated"
-    ],
-    "contracts": [
-      "Tool callers get explicit ValueError rather than silently ignored/misapplied overrides"
-    ],
-    "confidence": 0.85,
-    "evidence": [
-      "mcp_server.py:52-81"
-    ],
-    "last_validated": "2026-07-03T22:48:21.989815+00:00",
-    "created_at": "2026-07-03T22:48:21.989815+00:00"
-  },
-  "domain-path-traversal-guard": {
-    "name": "domain-path-traversal-guard",
-    "module": "mcp_server.py",
-    "description": "_validate_domain_for_cert_generation blocks path separators, '..' sequences, and leading dots before a domain string is used to build a filesystem path under CERT_STORE_PATH, in generate_test_cert.",
-    "invariants": [
-      "domain never contains '/', '\\\\', '..' or starts with '.'",
-      "Certificate generation always writes under the configured CERT_STORE_PATH, never an arbitrary path"
-    ],
-    "contracts": [
-      "Callers cannot escape the cert store directory via crafted domain names"
-    ],
-    "confidence": 0.9,
-    "evidence": [
-      "mcp_server.py:117-131",
-      "mcp_server.py:414-419"
-    ],
-    "last_validated": "2026-07-03T22:48:21.990095+00:00",
-    "created_at": "2026-07-03T22:48:21.990095+00:00"
-  },
-  "jsonl-structured-logging": {
-    "name": "jsonl-structured-logging",
-    "module": "logger.py",
-    "description": "JSONLFormatter emits one JSON object per log line including a run_id, merging any extra fields attached via logging's extra= kwarg or filters, with exceptions serialized as a single string field to preserve valid JSONL.",
-    "invariants": [
-      "Every log line is valid, single-line JSON",
-      "Standard LogRecord attributes are excluded from the merged extras to avoid duplication"
-    ],
-    "contracts": [
-      "Callers can add structured fields via extra= and they will appear verbatim in output"
-    ],
-    "confidence": 0.85,
-    "evidence": [
-      "logger.py:10-13",
-      "logger.py:22-46"
-    ],
-    "last_validated": "2026-07-03T22:48:21.990514+00:00",
-    "created_at": "2026-07-03T22:48:21.990514+00:00"
-  },
-  "logger-singleton-run-id": {
-    "name": "logger-singleton-run-id",
-    "module": "logger.py",
-    "description": "LoggerWithRunID is a process-wide singleton (via __new__ check) ensuring a single run_id is stamped on all log lines for the process lifetime, wrapping a LoggerDecorator that adds the RunIDFilter and JSONL handler.",
-    "invariants": [
-      "Only one LoggerWithRunID instance exists per process",
-      "run_id is generated once at first construction and never changes"
-    ],
-    "contracts": [
-      "All modules importing `logger` from logger.py share the same run_id-tagged logger"
-    ],
-    "confidence": 0.85,
-    "evidence": [
-      "logger.py:139-149",
-      "logger.py:151-162"
-    ],
-    "last_validated": "2026-07-03T22:48:21.990787+00:00",
-    "created_at": "2026-07-03T22:48:21.990787+00:00"
-  },
-  "graph-mode-branching-acme-vs-spiffe": {
-    "name": "graph-mode-branching-acme-vs-spiffe",
-    "module": "agent/graph.py",
-    "description": "build_graph() branches on settings.CERT_ISSUANCE_MODE to wire exactly one of two disjoint node sets/edge chains (_build_acme_graph or _build_spiffe_graph) into a shared StateGraph, sharing scanner/planner/pick_next_domain/storage_manager/summary_reporter but diverging on issuance mechanics.",
-    "invariants": [
-      "Never both ACME and SPIFFE node sets are wired into the same compiled graph",
-      "Both modes share the same entry (certificate_scanner) and terminal (summary_reporter → END) nodes"
-    ],
-    "contracts": [
-      "initial_state() produces a state dict compatible with whichever graph is built, regardless of mode"
-    ],
-    "confidence": 0.95,
-    "evidence": [
-      "agent/graph.py:65-77",
-      "agent/graph.py:80-158",
-      "agent/graph.py:161-201"
-    ],
-    "last_validated": "2026-07-03T22:48:21.991184+00:00",
-    "created_at": "2026-07-03T22:48:21.991184+00:00"
-  },
-  "spiffe-mode-terminal-failure-semantics": {
-    "name": "spiffe-mode-terminal-failure-semantics",
-    "module": "agent/graph.py",
-    "description": "SPIFFE mode graph has no error_handler/retry_scheduler nodes — spiffe_attestor failures are terminal per-domain, handled the same way storage_manager already handles its own failures (recorded and loop continues via domain_loop_router).",
-    "invariants": [
-      "SPIFFE mode never retries a failed attestation within the same domain iteration",
-      "Failures in spiffe_attestor must still allow domain_loop_router to proceed to the next domain"
-    ],
-    "contracts": [
-      "Callers of the SPIFFE graph should not expect retry/backoff behavior identical to ACME mode"
-    ],
-    "confidence": 0.8,
-    "evidence": [
-      "agent/graph.py:164-171",
-      "agent/graph.py:189-201"
-    ],
-    "last_validated": "2026-07-03T22:48:21.991755+00:00",
-    "created_at": "2026-07-03T22:48:21.991755+00:00"
-  },
-  "acme-error-routing-triad": {
-    "name": "acme-error-routing-triad",
-    "module": "agent/nodes/router.py",
-    "description": "error_action_router reads the plain state field error_action (set directly by error_handler, not JSON-parsed) to route to retry/skip_domain/abort, defaulting to skip_domain on missing/unrecognized values, and further gates 'retry' on retry_count < max_retries.",
-    "invariants": [
-      "error_action must never be re-parsed from error_analysis prose",
-      "retry is only honored when retry_count < max_retries even if action=='retry'"
-    ],
-    "contracts": [
-      "error_handler must set error_action to one of 'retry'|'skip'|'abort' before this router runs"
-    ],
-    "confidence": 0.9,
-    "evidence": [
-      "agent/nodes/router.py:104-133"
-    ],
-    "last_validated": "2026-07-03T22:48:21.992190+00:00",
-    "created_at": "2026-07-03T22:48:21.992190+00:00"
-  },
-  "pick-next-domain-state-reset": {
-    "name": "pick-next-domain-state-reset",
-    "module": "agent/nodes/router.py",
-    "description": "PickNextDomainNode pops the next domain from pending_renewals and resets per-domain transient state (current_order, current_nonce, retry_count, retry_delay_seconds) so each domain's ACME flow starts clean.",
-    "invariants": [
-      "current_order/current_nonce/retry_count are always reset when a new domain is picked"
-    ],
-    "contracts": [
-      "Downstream nodes (order_initializer, spiffe_attestor) can assume current_order is None at the start of a domain's processing"
-    ],
-    "confidence": 0.85,
-    "evidence": [
-      "agent/nodes/router.py:16-33"
-    ],
-    "last_validated": "2026-07-03T22:48:21.992585+00:00",
-    "created_at": "2026-07-03T22:48:21.992585+00:00"
-  },
-  "ca-mismatch-advisory-detection": {
-    "name": "ca-mismatch-advisory-detection",
-    "module": "agent/nodes/scanner.py",
-    "description": "CertificateScannerNode only performs CA detection on existing certs when CA_PROVIDER is 'custom'; for named providers, config is treated as authoritative and detection is skipped, though a mismatch warning still normalizes letsencrypt/letsencrypt_staging as equivalent.",
-    "invariants": [
-      "detected_ca_provider is None whenever CA_PROVIDER is a named (non-custom) provider",
-      "letsencrypt and letsencrypt_staging are treated as equivalent for mismatch comparison only"
-    ],
-    "contracts": [
-      "Renewal always uses the configured CA_PROVIDER regardless of what detection finds"
-    ],
-    "confidence": 0.85,
-    "evidence": [
-      "agent/nodes/scanner.py:64-68",
-      "agent/nodes/scanner.py:141-159"
-    ],
-    "last_validated": "2026-07-03T22:48:21.993030+00:00",
-    "created_at": "2026-07-03T22:48:21.993030+00:00"
-  },
-  "planner-llm-output-domain-validation": {
-    "name": "planner-llm-output-domain-validation",
-    "module": "agent/nodes/planner.py",
-    "description": "_parse_and_validate strips markdown fences, drops non-string entries, filters out hallucinated domains not in managed_domains, and backfills any unclassified managed domain into 'routine', guaranteeing every managed domain appears in exactly one bucket.",
-    "invariants": [
-      "Every managed domain appears in exactly one of urgent/routine/skip after validation",
-      "No domain outside managed_domains is ever added to pending_renewals from LLM output"
-    ],
-    "contracts": [
-      "Callers of renewal_planner can trust pending_renewals contains only valid managed domains, even under a malformed/hallucinating LLM"
-    ],
-    "confidence": 0.9,
-    "evidence": [
-      "agent/nodes/planner.py:210-259",
-      "agent/nodes/planner.py:194-207"
-    ],
-    "last_validated": "2026-07-03T22:48:21.993450+00:00",
-    "created_at": "2026-07-03T22:48:21.993450+00:00"
-  },
-  "planner-llm-vs-deterministic-dispatch": {
-    "name": "planner-llm-vs-deterministic-dispatch",
-    "module": "agent/nodes/planner.py",
-    "description": "RenewalPlannerNode.run dispatches to LLM-based or deterministic planning based on settings.LLM_DISABLED, with the deterministic path ordering no-cert domains first then expiry-soon domains sorted ascending by days.",
-    "invariants": [
-      "Deterministic mode never calls out to any LLM/network"
-    ],
-    "contracts": [
-      "pending_renewals is always populated in priority order regardless of which path is taken"
-    ],
-    "confidence": 0.85,
-    "evidence": [
-      "agent/nodes/planner.py:32-37",
-      "agent/nodes/planner.py:190-233"
-    ],
-    "last_validated": "2026-07-03T22:48:21.993834+00:00",
-    "created_at": "2026-07-03T22:48:21.993834+00:00"
-  },
-  "account-key-not-in-state": {
-    "name": "account-key-not-in-state",
-    "module": "agent/nodes/account.py",
-    "description": "The ACME account private key is never stored in AgentState (to avoid leaking into LangSmith traces); only the account_key_path is kept in state, and the key is loaded from disk on demand by nodes that need it.",
-    "invariants": [
-      "AgentState never contains raw private key material for the account key"
-    ],
-    "contracts": [
-      "Any node needing the account key must load it fresh from account_key_path"
-    ],
-    "confidence": 0.9,
-    "evidence": [
-      "agent/state.py:14-16",
-      "agent/nodes/account.py:16-19"
-    ],
-    "last_validated": "2026-07-03T22:48:21.994276+00:00",
-    "created_at": "2026-07-03T22:48:21.994276+00:00"
-  },
-  "domain-privkey-never-in-state": {
-    "name": "domain-privkey-never-in-state",
-    "module": "agent/nodes/csr.py",
-    "description": "CsrGeneratorNode writes the generated domain private key directly to disk (mode 0o600) and only stores the CSR DER (hex-encoded) in state; the private key itself never passes through AgentState/checkpoints.",
-    "invariants": [
-      "Domain private key file permissions are always set to 0o600 immediately after write",
-      "Domain private key content never appears in AgentState"
-    ],
-    "contracts": [
-      "storage_manager can read privkey.pem from disk after CSR generation completes"
-    ],
-    "confidence": 0.85,
-    "evidence": [
-      "agent/nodes/csr.py:56-60",
-      "agent/nodes/csr.py:65-69"
-    ],
-    "last_validated": "2026-07-03T22:48:21.994659+00:00",
-    "created_at": "2026-07-03T22:48:21.994659+00:00"
-  },
-  "challenge-type-mode-consistency": {
-    "name": "challenge-type-mode-consistency",
-    "module": "agent/nodes/order.py",
-    "description": "order_initializer selects http-01 or dns-01 challenge type based on settings.HTTP_CHALLENGE_MODE, and only populates dns_txt_values when in dns mode, keeping AcmeOrder's parallel lists consistent across auth_urls/challenge_urls/auth_domains/dns_txt_values.",
-    "invariants": [
-      "All AcmeOrder list fields (auth_urls, challenge_urls, challenge_tokens, key_authorizations) remain parallel/same-length for a given order",
-      "dns_txt_values is empty unless HTTP_CHALLENGE_MODE=='dns'"
-    ],
-    "contracts": [
-      "challenge_setup/challenge_verifier can safely zip these parallel lists"
-    ],
-    "confidence": 0.85,
-    "evidence": [
-      "agent/nodes/order.py:70-95",
-      "agent/state.py:41-51"
-    ],
-    "last_validated": "2026-07-03T22:48:21.995046+00:00",
-    "created_at": "2026-07-03T22:48:21.995046+00:00"
-  },
-  "challenge-lifecycle-shared-module-state": {
-    "name": "challenge-lifecycle-shared-module-state",
-    "module": "agent/nodes/challenge.py",
-    "description": "ChallengeSetupNode and ChallengeVerifierNode share module-level singletons (_standalone_server, _dns_provider) across the setup→verify→cleanup lifecycle for a single domain's challenge, since standalone HTTP server and DNS provider connections must persist between graph node invocations.",
-    "invariants": [
-      "_standalone_server/_dns_provider are only non-None while a challenge is actively being served for the current domain",
-      "_cleanup_challenge always tears down the mode-appropriate resource (server stop, webroot file removal, or DNS TXT deletion) before returning control"
-    ],
-    "contracts": [
-      "challenge_verifier assumes challenge_setup already started serving the first token for standalone mode"
-    ],
-    "confidence": 0.85,
-    "evidence": [
-      "agent/nodes/challenge.py:29-33",
-      "agent/nodes/challenge.py:216-231"
-    ],
-    "last_validated": "2026-07-03T22:48:21.995444+00:00",
-    "created_at": "2026-07-03T22:48:21.995444+00:00"
-  },
-  "authorization-already-valid-skip": {
-    "name": "authorization-already-valid-skip",
-    "module": "agent/nodes/challenge.py",
-    "description": "ChallengeVerifierNode checks each authorization's current status before responding to its challenge; if already 'valid' (server-side reuse across orders per RFC 8555 §7.5), it skips responding to avoid a 'malformed' error from re-responding to a valid challenge.",
-    "invariants": [
-      "Never POST a challenge response for an authorization already in 'valid' status"
-    ],
-    "contracts": [
-      "Verifier is idempotent/safe to call even when the CA has reused a prior authorization"
-    ],
-    "confidence": 0.85,
-    "evidence": [
-      "agent/nodes/challenge.py:180-185"
-    ],
-    "last_validated": "2026-07-03T22:48:21.995886+00:00",
-    "created_at": "2026-07-03T22:48:21.995886+00:00"
-  },
-  "pem-chain-leaf-vs-intermediate-split": {
-    "name": "pem-chain-leaf-vs-intermediate-split",
-    "module": "agent/nodes/storage.py",
-    "description": "_split_pem_chain splits DigiCert's full PEM chain response on '-----END CERTIFICATE-----' boundaries, treating the first block as the leaf cert.pem and the rest as chain.pem.",
-    "invariants": [
-      "The first PEM block in full_chain_pem is always the leaf certificate for the requested domain"
-    ],
-    "contracts": [
-      "storage_manager writes cert.pem, chain.pem, fullchain.pem, and metadata.json consistently for every successful renewal"
-    ],
-    "confidence": 0.8,
-    "evidence": [
-      "agent/nodes/storage.py:122-140"
-    ],
-    "last_validated": "2026-07-03T22:48:21.996322+00:00",
-    "created_at": "2026-07-03T22:48:21.996322+00:00"
-  },
-  "error-handler-fatal-vs-retryable-classification": {
-    "name": "error-handler-fatal-vs-retryable-classification",
-    "module": "agent/nodes/error_handler.py",
-    "description": "ErrorHandlerNode classifies errors as fatal (unauthorized, accountdoesnotexist, badkey, externalaccountrequired substrings) forcing abort regardless of retry_count, otherwise applies exponential backoff (capped 300s) until max_retries then skips.",
-    "invariants": [
-      "Fatal error patterns always force action='abort' regardless of retry_count/max_retries",
-      "Backoff delay is capped at 300 seconds",
-      "abort clears all pending_renewals and marks them failed, stopping the whole run"
-    ],
-    "contracts": [
-      "error_action_router can trust error_action is always one of retry/skip/abort after this node runs"
-    ],
-    "confidence": 0.85,
-    "evidence": [
-      "agent/nodes/error_handler.py:19-25",
-      "agent/nodes/error_handler.py:96-113",
-      "agent/nodes/error_handler.py:126-135"
-    ],
-    "last_validated": "2026-07-03T22:48:21.996818+00:00",
-    "created_at": "2026-07-03T22:48:21.996818+00:00"
-  },
-  "retry-scheduler-backoff-gate": {
-    "name": "retry-scheduler-backoff-gate",
-    "module": "agent/nodes/retry_scheduler.py",
-    "description": "RetrySchedulerNode synchronously sleeps until state['retry_not_before'] elapses before clearing it, decoupling error-decision (error_handler) from timing enforcement (retry_scheduler) in the graph.",
-    "invariants": [
-      "retry_not_before is always cleared to None after this node runs, whether or not a wait occurred"
-    ],
-    "contracts": [
-      "pick_next_domain is only re-entered for a retry after the scheduled backoff has elapsed"
-    ],
-    "confidence": 0.8,
-    "evidence": [
-      "agent/nodes/retry_scheduler.py:29-49"
-    ],
-    "last_validated": "2026-07-03T22:48:21.997278+00:00",
-    "created_at": "2026-07-03T22:48:21.997278+00:00"
-  },
-  "revocation-graph-best-effort-looping": {
-    "name": "revocation-graph-best-effort-looping",
-    "module": "agent/revocation_graph.py",
-    "description": "The revocation subgraph has no error_handler/retry — cert_revoker failures are logged into failed_revocations and revocation_loop_router unconditionally continues to the next domain, making revocation best-effort across a batch.",
-    "invariants": [
-      "A single domain's revocation failure never halts processing of remaining revocation_targets"
-    ],
-    "contracts": [
-      "revocation_reporter always receives complete revoked_domains/failed_revocations lists after all targets are processed"
-    ],
-    "confidence": 0.85,
-    "evidence": [
-      "agent/revocation_graph.py:16-19",
-      "agent/nodes/revocation_router.py:56-65"
-    ],
-    "last_validated": "2026-07-03T22:48:21.997799+00:00",
-    "created_at": "2026-07-03T22:48:21.997799+00:00"
-  },
-  "claude-cli-llm-provider-no-key-required": {
-    "name": "claude-cli-llm-provider-no-key-required",
-    "module": "llm/factory.py",
-    "description": "make_llm() special-cases LLM_PROVIDER='claude_cli' to shell out to the `claude` binary (--safe-mode --tools none) reusing the caller's existing OAuth login, bypassing the langchain/API-key path entirely and requiring no ANTHROPIC_API_KEY or optional extras.",
-    "invariants": [
-      "claude_cli path never requires langchain to be installed or any API key",
-      "--tools none and --safe-mode are always passed to prevent agentic/tool execution and reduce token overhead"
-    ],
-    "contracts": [
-      "ClaudeCLIChatModel.invoke() returns an object with a .content attribute compatible with langchain's AIMessage interface"
-    ],
-    "confidence": 0.9,
-    "evidence": [
-      "llm/factory.py:33-46",
-      "llm/factory.py:76-100",
-      "llm/factory.py:143-144"
-    ],
-    "last_validated": "2026-07-03T22:48:21.998323+00:00",
-    "created_at": "2026-07-03T22:48:21.998323+00:00"
-  },
-  "node-registry-class-instantiation-factory": {
-    "name": "node-registry-class-instantiation-factory",
-    "module": "agent/nodes/registry.py",
-    "description": "get_node(name) looks up a callable class in NODE_REGISTRY and instantiates it, enforcing that registry entries are classes (not pre-built instances) via an explicit TypeError check.",
-    "invariants": [
-      "Every value in NODE_REGISTRY must be a class (isinstance(..., type)), never a bare function or instance"
-    ],
-    "contracts": [
-      "build_graph()/build_revocation_graph() can call get_node(name) for any registered name and get a fresh callable node instance"
-    ],
-    "confidence": 0.85,
-    "evidence": [
-      "agent/nodes/registry.py:59-72"
-    ],
-    "last_validated": "2026-07-03T22:48:21.998858+00:00",
-    "created_at": "2026-07-03T22:48:21.998858+00:00"
-  },
-  "agent-state-typed-schema": {
-    "name": "agent-state-typed-schema",
-    "module": "agent/state.py",
-    "description": "AgentState is a single shared TypedDict spanning both the renewal graph and revocation graph, with revocation-specific fields (revocation_targets, current_revocation_domain, etc.) coexisting alongside renewal fields even though a given graph only uses one subset.",
-    "invariants": [
-      "messages uses add_messages reducer for LangGraph message accumulation",
-      "acme_account_key is never a field in this TypedDict (kept out of state deliberately)"
-    ],
-    "contracts": [
-      "Both build_graph() and build_revocation_graph() construct/consume the same AgentState shape, differing only in which fields they populate"
-    ],
-    "confidence": 0.85,
-    "evidence": [
-      "agent/state.py:60-104",
-      "agent/state.py:97-104"
-    ],
-    "last_validated": "2026-07-03T22:48:21.999389+00:00",
-    "created_at": "2026-07-03T22:48:21.999389+00:00"
+  "concepts": {
+    "cert-issuance-mode-strict-exclusivity": {
+      "name": "cert-issuance-mode-strict-exclusivity",
+      "module": "config.py",
+      "description": "Settings enforces that a single instance runs either ACME or SPIFFE issuance, never both, via CERT_ISSUANCE_MODE and cross-validating that the other mode's fields are unset/default.",
+      "invariants": [
+        "CERT_ISSUANCE_MODE is either 'acme' or 'spiffe', never both active",
+        "In acme mode, SPIRE_AGENT_SOCKET_PATH must remain default and SPIFFE_TRUST_DOMAIN/MANAGED_SPIFFE_IDS must be empty",
+        "In spiffe mode, MANAGED_DOMAINS must be empty and SPIFFE_TRUST_DOMAIN must be set"
+      ],
+      "contracts": [
+        "Construction-time validation rejects misconfigured mode/field combinations before any network call"
+      ],
+      "confidence": 0.95,
+      "evidence": [
+        "config.py:63",
+        "config.py:204-222"
+      ],
+      "last_validated": "2026-07-03T22:48:21.984690+00:00",
+      "created_at": "2026-07-03T22:48:21.984690+00:00"
+    },
+    "csv-fallback-settings-source": {
+      "name": "csv-fallback-settings-source",
+      "module": "config.py",
+      "description": "Custom pydantic-settings sources catch JSON-parse failures on List[str] fields and pass the raw string through so field_validators can split on commas, supporting comma-separated env vars.",
+      "invariants": [
+        "Only ValueError from prepare_field_value is swallowed, not other exceptions"
+      ],
+      "contracts": [
+        "MANAGED_DOMAINS and MANAGED_SPIFFE_IDS accept either JSON arrays or comma-separated strings from env/.env"
+      ],
+      "confidence": 0.9,
+      "evidence": [
+        "config.py:26-45",
+        "config.py:150-163"
+      ],
+      "last_validated": "2026-07-03T22:48:21.987760+00:00",
+      "created_at": "2026-07-03T22:48:21.987760+00:00"
+    },
+    "eab-all-or-nothing-validation": {
+      "name": "eab-all-or-nothing-validation",
+      "module": "config.py",
+      "description": "For CA providers requiring External Account Binding (digicert, zerossl, sectigo), both ACME_EAB_KEY_ID and ACME_EAB_HMAC_KEY must be set together or neither.",
+      "invariants": [
+        "key_set == hmac_set for EAB-required providers"
+      ],
+      "contracts": [
+        "Fails fast at settings construction rather than at first ACME network call"
+      ],
+      "confidence": 0.9,
+      "evidence": [
+        "config.py:249-262"
+      ],
+      "last_validated": "2026-07-03T22:48:21.988009+00:00",
+      "created_at": "2026-07-03T22:48:21.988009+00:00"
+    },
+    "acme-directory-preset-resolution": {
+      "name": "acme-directory-preset-resolution",
+      "module": "config.py",
+      "description": "Resolves ACME_DIRECTORY_URL from a CA_PROVIDER preset map unless CA_PROVIDER is 'custom', in which case ACME_DIRECTORY_URL must be explicitly provided; also warns on deprecated DIGICERT_* env vars.",
+      "invariants": [
+        "ACME_DIRECTORY_URL is always resolved by the time log_resolved_settings runs (declaration order dependency)"
+      ],
+      "contracts": [
+        "Callers can rely on settings.ACME_DIRECTORY_URL being populated after Settings construction in acme mode"
+      ],
+      "confidence": 0.9,
+      "evidence": [
+        "config.py:283-306"
+      ],
+      "last_validated": "2026-07-03T22:48:21.988240+00:00",
+      "created_at": "2026-07-03T22:48:21.988240+00:00"
+    },
+    "cli-readonly-query-commands": {
+      "name": "cli-readonly-query-commands",
+      "module": "main.py",
+      "description": "CLI entry point distinguishes state-changing commands (--once, --schedule, --revoke-cert) from strictly read-only query commands (--expiring-in-30-days, --domain-status) that never issue/renew/revoke certs.",
+      "invariants": [
+        "--expiring-in-30-days and --domain-status never mutate cert store or contact ACME/SPIRE servers"
+      ],
+      "contracts": [
+        "Query commands are safe to call repeatedly with no side effects"
+      ],
+      "confidence": 0.85,
+      "evidence": [
+        "main.py:16-22",
+        "main.py:170-207",
+        "main.py:236-292"
+      ],
+      "last_validated": "2026-07-03T22:48:21.988493+00:00",
+      "created_at": "2026-07-03T22:48:21.988493+00:00"
+    },
+    "cli-command-registry-dispatch": {
+      "name": "cli-command-registry-dispatch",
+      "module": "main.py",
+      "description": "main() builds a dict mapping action name to (is_selected, handler) and executes the first matching handler, replacing an if/elif chain with a declarative registry.",
+      "invariants": [
+        "Exactly one handler executes per invocation (first match wins per dict iteration order)",
+        "At least one action flag must be selected or help is printed and process exits 1"
+      ],
+      "contracts": [
+        "Adding a new CLI action requires registering it in command_registry"
+      ],
+      "confidence": 0.8,
+      "evidence": [
+        "main.py:388-431",
+        "main.py:433-437"
+      ],
+      "last_validated": "2026-07-03T22:48:21.988787+00:00",
+      "created_at": "2026-07-03T22:48:21.988787+00:00"
+    },
+    "runtime-settings-override-singleton-swap": {
+      "name": "runtime-settings-override-singleton-swap",
+      "module": "main.py",
+      "description": "apply_runtime_settings_overrides replaces the module-level config.settings singleton with a new Settings object built from CLI overrides (--ca-provider/--acme-directory-url), affecting the whole process for that run.",
+      "invariants": [
+        "Override only occurs if at least one of ca_provider/acme_directory_url is provided"
+      ],
+      "contracts": [
+        "Downstream code reading config.settings sees the overridden values for the remainder of the process"
+      ],
+      "confidence": 0.85,
+      "evidence": [
+        "main.py:317-349"
+      ],
+      "last_validated": "2026-07-03T22:48:21.989068+00:00",
+      "created_at": "2026-07-03T22:48:21.989068+00:00"
+    },
+    "mcp-tool-serialization-lock": {
+      "name": "mcp-tool-serialization-lock",
+      "module": "mcp_server.py",
+      "description": "State-mutating MCP tools (renew_once, revoke_cert, generate_test_cert, health) acquire a process-wide asyncio.Lock via _operation_lock(required=True) to serialize execution against the shared config.settings singleton override mechanism; read-only tools use required=False and skip locking.",
+      "invariants": [
+        "Only one mutating MCP tool call touches config.settings/global state at a time",
+        "Read-only tools never block on or require the lock"
+      ],
+      "contracts": [
+        "Concurrent MCP tool calls cannot interleave settings overrides mid-operation"
+      ],
+      "confidence": 0.85,
+      "evidence": [
+        "mcp_server.py:47-48",
+        "mcp_server.py:146-155",
+        "mcp_server.py:333-341"
+      ],
+      "last_validated": "2026-07-03T22:48:21.989314+00:00",
+      "created_at": "2026-07-03T22:48:21.989314+00:00"
+    },
+    "mcp-temporary-settings-override-contextmanager": {
+      "name": "mcp-temporary-settings-override-contextmanager",
+      "module": "mcp_server.py",
+      "description": "_temporary_settings_override swaps config.settings for the duration of a single tool call and restores the original in a finally block, enabling per-call CA overrides without permanently mutating global state (unlike main.py's CLI override).",
+      "invariants": [
+        "config.settings is always restored to its prior value after the tool call, even on exception"
+      ],
+      "contracts": [
+        "Callers can pass per-request settings_override without affecting subsequent MCP calls"
+      ],
+      "confidence": 0.9,
+      "evidence": [
+        "mcp_server.py:83-96"
+      ],
+      "last_validated": "2026-07-03T22:48:21.989560+00:00",
+      "created_at": "2026-07-03T22:48:21.989560+00:00"
+    },
+    "mcp-ca-input-mode-explicit-resolution": {
+      "name": "mcp-ca-input-mode-explicit-resolution",
+      "module": "mcp_server.py",
+      "description": "_resolve_ca_inputs requires explicit ca_input_mode ('config' or 'custom') rather than inferring from optional params, validating ca_provider against known choices and URL scheme when in 'custom' mode.",
+      "invariants": [
+        "ca_input_mode must be 'config' or 'custom'",
+        "In 'custom' mode both ca_provider and acme_directory_url are required and validated"
+      ],
+      "contracts": [
+        "Tool callers get explicit ValueError rather than silently ignored/misapplied overrides"
+      ],
+      "confidence": 0.85,
+      "evidence": [
+        "mcp_server.py:52-81"
+      ],
+      "last_validated": "2026-07-03T22:48:21.989815+00:00",
+      "created_at": "2026-07-03T22:48:21.989815+00:00"
+    },
+    "domain-path-traversal-guard": {
+      "name": "domain-path-traversal-guard",
+      "module": "mcp_server.py",
+      "description": "_validate_domain_for_cert_generation blocks path separators, '..' sequences, and leading dots before a domain string is used to build a filesystem path under CERT_STORE_PATH, in generate_test_cert.",
+      "invariants": [
+        "domain never contains '/', '\\\\', '..' or starts with '.'",
+        "Certificate generation always writes under the configured CERT_STORE_PATH, never an arbitrary path"
+      ],
+      "contracts": [
+        "Callers cannot escape the cert store directory via crafted domain names"
+      ],
+      "confidence": 0.9,
+      "evidence": [
+        "mcp_server.py:117-131",
+        "mcp_server.py:414-419"
+      ],
+      "last_validated": "2026-07-03T22:48:21.990095+00:00",
+      "created_at": "2026-07-03T22:48:21.990095+00:00"
+    },
+    "jsonl-structured-logging": {
+      "name": "jsonl-structured-logging",
+      "module": "logger.py",
+      "description": "JSONLFormatter emits one JSON object per log line including a run_id, merging any extra fields attached via logging's extra= kwarg or filters, with exceptions serialized as a single string field to preserve valid JSONL.",
+      "invariants": [
+        "Every log line is valid, single-line JSON",
+        "Standard LogRecord attributes are excluded from the merged extras to avoid duplication"
+      ],
+      "contracts": [
+        "Callers can add structured fields via extra= and they will appear verbatim in output"
+      ],
+      "confidence": 0.85,
+      "evidence": [
+        "logger.py:10-13",
+        "logger.py:22-46"
+      ],
+      "last_validated": "2026-07-03T22:48:21.990514+00:00",
+      "created_at": "2026-07-03T22:48:21.990514+00:00"
+    },
+    "logger-singleton-run-id": {
+      "name": "logger-singleton-run-id",
+      "module": "logger.py",
+      "description": "LoggerWithRunID is a process-wide singleton (via __new__ check) ensuring a single run_id is stamped on all log lines for the process lifetime, wrapping a LoggerDecorator that adds the RunIDFilter and JSONL handler.",
+      "invariants": [
+        "Only one LoggerWithRunID instance exists per process",
+        "run_id is generated once at first construction and never changes"
+      ],
+      "contracts": [
+        "All modules importing `logger` from logger.py share the same run_id-tagged logger"
+      ],
+      "confidence": 0.85,
+      "evidence": [
+        "logger.py:139-149",
+        "logger.py:151-162"
+      ],
+      "last_validated": "2026-07-03T22:48:21.990787+00:00",
+      "created_at": "2026-07-03T22:48:21.990787+00:00"
+    },
+    "graph-mode-branching-acme-vs-spiffe": {
+      "name": "graph-mode-branching-acme-vs-spiffe",
+      "module": "agent/graph.py",
+      "description": "build_graph() branches on settings.CERT_ISSUANCE_MODE to wire exactly one of two disjoint node sets/edge chains (_build_acme_graph or _build_spiffe_graph) into a shared StateGraph, sharing scanner/planner/pick_next_domain/storage_manager/summary_reporter but diverging on issuance mechanics.",
+      "invariants": [
+        "Never both ACME and SPIFFE node sets are wired into the same compiled graph",
+        "Both modes share the same entry (certificate_scanner) and terminal (summary_reporter → END) nodes"
+      ],
+      "contracts": [
+        "initial_state() produces a state dict compatible with whichever graph is built, regardless of mode"
+      ],
+      "confidence": 0.95,
+      "evidence": [
+        "agent/graph.py:65-77",
+        "agent/graph.py:80-158",
+        "agent/graph.py:161-201"
+      ],
+      "last_validated": "2026-07-03T22:48:21.991184+00:00",
+      "created_at": "2026-07-03T22:48:21.991184+00:00"
+    },
+    "spiffe-mode-terminal-failure-semantics": {
+      "name": "spiffe-mode-terminal-failure-semantics",
+      "module": "agent/graph.py",
+      "description": "SPIFFE mode graph has no error_handler/retry_scheduler nodes — spiffe_attestor failures are terminal per-domain, handled the same way storage_manager already handles its own failures (recorded and loop continues via domain_loop_router).",
+      "invariants": [
+        "SPIFFE mode never retries a failed attestation within the same domain iteration",
+        "Failures in spiffe_attestor must still allow domain_loop_router to proceed to the next domain"
+      ],
+      "contracts": [
+        "Callers of the SPIFFE graph should not expect retry/backoff behavior identical to ACME mode"
+      ],
+      "confidence": 0.8,
+      "evidence": [
+        "agent/graph.py:164-171",
+        "agent/graph.py:189-201"
+      ],
+      "last_validated": "2026-07-03T22:48:21.991755+00:00",
+      "created_at": "2026-07-03T22:48:21.991755+00:00"
+    },
+    "acme-error-routing-triad": {
+      "name": "acme-error-routing-triad",
+      "module": "agent/nodes/router.py",
+      "description": "error_action_router reads the plain state field error_action (set directly by error_handler, not JSON-parsed) to route to retry/skip_domain/abort, defaulting to skip_domain on missing/unrecognized values, and further gates 'retry' on retry_count < max_retries.",
+      "invariants": [
+        "error_action must never be re-parsed from error_analysis prose",
+        "retry is only honored when retry_count < max_retries even if action=='retry'"
+      ],
+      "contracts": [
+        "error_handler must set error_action to one of 'retry'|'skip'|'abort' before this router runs"
+      ],
+      "confidence": 0.9,
+      "evidence": [
+        "agent/nodes/router.py:104-133"
+      ],
+      "last_validated": "2026-07-03T22:48:21.992190+00:00",
+      "created_at": "2026-07-03T22:48:21.992190+00:00"
+    },
+    "pick-next-domain-state-reset": {
+      "name": "pick-next-domain-state-reset",
+      "module": "agent/nodes/router.py",
+      "description": "PickNextDomainNode pops the next domain from pending_renewals and resets per-domain transient state (current_order, current_nonce, retry_count, retry_delay_seconds) so each domain's ACME flow starts clean.",
+      "invariants": [
+        "current_order/current_nonce/retry_count are always reset when a new domain is picked"
+      ],
+      "contracts": [
+        "Downstream nodes (order_initializer, spiffe_attestor) can assume current_order is None at the start of a domain's processing"
+      ],
+      "confidence": 0.85,
+      "evidence": [
+        "agent/nodes/router.py:16-33"
+      ],
+      "last_validated": "2026-07-03T22:48:21.992585+00:00",
+      "created_at": "2026-07-03T22:48:21.992585+00:00"
+    },
+    "ca-mismatch-advisory-detection": {
+      "name": "ca-mismatch-advisory-detection",
+      "module": "agent/nodes/scanner.py",
+      "description": "CertificateScannerNode only performs CA detection on existing certs when CA_PROVIDER is 'custom'; for named providers, config is treated as authoritative and detection is skipped, though a mismatch warning still normalizes letsencrypt/letsencrypt_staging as equivalent.",
+      "invariants": [
+        "detected_ca_provider is None whenever CA_PROVIDER is a named (non-custom) provider",
+        "letsencrypt and letsencrypt_staging are treated as equivalent for mismatch comparison only"
+      ],
+      "contracts": [
+        "Renewal always uses the configured CA_PROVIDER regardless of what detection finds"
+      ],
+      "confidence": 0.85,
+      "evidence": [
+        "agent/nodes/scanner.py:64-68",
+        "agent/nodes/scanner.py:141-159"
+      ],
+      "last_validated": "2026-07-03T22:48:21.993030+00:00",
+      "created_at": "2026-07-03T22:48:21.993030+00:00"
+    },
+    "planner-llm-output-domain-validation": {
+      "name": "planner-llm-output-domain-validation",
+      "module": "agent/nodes/planner.py",
+      "description": "_parse_and_validate strips markdown fences, drops non-string entries, filters out hallucinated domains not in managed_domains, and backfills any unclassified managed domain into 'routine', guaranteeing every managed domain appears in exactly one bucket.",
+      "invariants": [
+        "Every managed domain appears in exactly one of urgent/routine/skip after validation",
+        "No domain outside managed_domains is ever added to pending_renewals from LLM output"
+      ],
+      "contracts": [
+        "Callers of renewal_planner can trust pending_renewals contains only valid managed domains, even under a malformed/hallucinating LLM"
+      ],
+      "confidence": 0.9,
+      "evidence": [
+        "agent/nodes/planner.py:210-259",
+        "agent/nodes/planner.py:194-207"
+      ],
+      "last_validated": "2026-07-03T22:48:21.993450+00:00",
+      "created_at": "2026-07-03T22:48:21.993450+00:00"
+    },
+    "planner-llm-vs-deterministic-dispatch": {
+      "name": "planner-llm-vs-deterministic-dispatch",
+      "module": "agent/nodes/planner.py",
+      "description": "RenewalPlannerNode.run dispatches to LLM-based or deterministic planning based on settings.LLM_DISABLED, with the deterministic path ordering no-cert domains first then expiry-soon domains sorted ascending by days.",
+      "invariants": [
+        "Deterministic mode never calls out to any LLM/network"
+      ],
+      "contracts": [
+        "pending_renewals is always populated in priority order regardless of which path is taken"
+      ],
+      "confidence": 0.85,
+      "evidence": [
+        "agent/nodes/planner.py:32-37",
+        "agent/nodes/planner.py:190-233"
+      ],
+      "last_validated": "2026-07-03T22:48:21.993834+00:00",
+      "created_at": "2026-07-03T22:48:21.993834+00:00"
+    },
+    "account-key-not-in-state": {
+      "name": "account-key-not-in-state",
+      "module": "agent/nodes/account.py",
+      "description": "The ACME account private key is never stored in AgentState (to avoid leaking into LangSmith traces); only the account_key_path is kept in state, and the key is loaded from disk on demand by nodes that need it.",
+      "invariants": [
+        "AgentState never contains raw private key material for the account key"
+      ],
+      "contracts": [
+        "Any node needing the account key must load it fresh from account_key_path"
+      ],
+      "confidence": 0.9,
+      "evidence": [
+        "agent/state.py:14-16",
+        "agent/nodes/account.py:16-19"
+      ],
+      "last_validated": "2026-07-03T22:48:21.994276+00:00",
+      "created_at": "2026-07-03T22:48:21.994276+00:00"
+    },
+    "domain-privkey-never-in-state": {
+      "name": "domain-privkey-never-in-state",
+      "module": "agent/nodes/csr.py",
+      "description": "CsrGeneratorNode writes the generated domain private key directly to disk (mode 0o600) and only stores the CSR DER (hex-encoded) in state; the private key itself never passes through AgentState/checkpoints.",
+      "invariants": [
+        "Domain private key file permissions are always set to 0o600 immediately after write",
+        "Domain private key content never appears in AgentState"
+      ],
+      "contracts": [
+        "storage_manager can read privkey.pem from disk after CSR generation completes"
+      ],
+      "confidence": 0.85,
+      "evidence": [
+        "agent/nodes/csr.py:56-60",
+        "agent/nodes/csr.py:65-69"
+      ],
+      "last_validated": "2026-07-03T22:48:21.994659+00:00",
+      "created_at": "2026-07-03T22:48:21.994659+00:00"
+    },
+    "challenge-type-mode-consistency": {
+      "name": "challenge-type-mode-consistency",
+      "module": "agent/nodes/order.py",
+      "description": "order_initializer selects http-01 or dns-01 challenge type based on settings.HTTP_CHALLENGE_MODE, and only populates dns_txt_values when in dns mode, keeping AcmeOrder's parallel lists consistent across auth_urls/challenge_urls/auth_domains/dns_txt_values.",
+      "invariants": [
+        "All AcmeOrder list fields (auth_urls, challenge_urls, challenge_tokens, key_authorizations) remain parallel/same-length for a given order",
+        "dns_txt_values is empty unless HTTP_CHALLENGE_MODE=='dns'"
+      ],
+      "contracts": [
+        "challenge_setup/challenge_verifier can safely zip these parallel lists"
+      ],
+      "confidence": 0.85,
+      "evidence": [
+        "agent/nodes/order.py:70-95",
+        "agent/state.py:41-51"
+      ],
+      "last_validated": "2026-07-03T22:48:21.995046+00:00",
+      "created_at": "2026-07-03T22:48:21.995046+00:00"
+    },
+    "challenge-lifecycle-shared-module-state": {
+      "name": "challenge-lifecycle-shared-module-state",
+      "module": "agent/nodes/challenge.py",
+      "description": "ChallengeSetupNode and ChallengeVerifierNode share module-level singletons (_standalone_server, _dns_provider) across the setup→verify→cleanup lifecycle for a single domain's challenge, since standalone HTTP server and DNS provider connections must persist between graph node invocations.",
+      "invariants": [
+        "_standalone_server/_dns_provider are only non-None while a challenge is actively being served for the current domain",
+        "_cleanup_challenge always tears down the mode-appropriate resource (server stop, webroot file removal, or DNS TXT deletion) before returning control"
+      ],
+      "contracts": [
+        "challenge_verifier assumes challenge_setup already started serving the first token for standalone mode"
+      ],
+      "confidence": 0.85,
+      "evidence": [
+        "agent/nodes/challenge.py:29-33",
+        "agent/nodes/challenge.py:216-231"
+      ],
+      "last_validated": "2026-07-03T22:48:21.995444+00:00",
+      "created_at": "2026-07-03T22:48:21.995444+00:00"
+    },
+    "authorization-already-valid-skip": {
+      "name": "authorization-already-valid-skip",
+      "module": "agent/nodes/challenge.py",
+      "description": "ChallengeVerifierNode checks each authorization's current status before responding to its challenge; if already 'valid' (server-side reuse across orders per RFC 8555 §7.5), it skips responding to avoid a 'malformed' error from re-responding to a valid challenge.",
+      "invariants": [
+        "Never POST a challenge response for an authorization already in 'valid' status"
+      ],
+      "contracts": [
+        "Verifier is idempotent/safe to call even when the CA has reused a prior authorization"
+      ],
+      "confidence": 0.85,
+      "evidence": [
+        "agent/nodes/challenge.py:180-185"
+      ],
+      "last_validated": "2026-07-03T22:48:21.995886+00:00",
+      "created_at": "2026-07-03T22:48:21.995886+00:00"
+    },
+    "pem-chain-leaf-vs-intermediate-split": {
+      "name": "pem-chain-leaf-vs-intermediate-split",
+      "module": "agent/nodes/storage.py",
+      "description": "_split_pem_chain splits DigiCert's full PEM chain response on '-----END CERTIFICATE-----' boundaries, treating the first block as the leaf cert.pem and the rest as chain.pem.",
+      "invariants": [
+        "The first PEM block in full_chain_pem is always the leaf certificate for the requested domain"
+      ],
+      "contracts": [
+        "storage_manager writes cert.pem, chain.pem, fullchain.pem, and metadata.json consistently for every successful renewal"
+      ],
+      "confidence": 0.8,
+      "evidence": [
+        "agent/nodes/storage.py:122-140"
+      ],
+      "last_validated": "2026-07-03T22:48:21.996322+00:00",
+      "created_at": "2026-07-03T22:48:21.996322+00:00"
+    },
+    "error-handler-fatal-vs-retryable-classification": {
+      "name": "error-handler-fatal-vs-retryable-classification",
+      "module": "agent/nodes/error_handler.py",
+      "description": "ErrorHandlerNode classifies errors as fatal (unauthorized, accountdoesnotexist, badkey, externalaccountrequired substrings) forcing abort regardless of retry_count, otherwise applies exponential backoff (capped 300s) until max_retries then skips.",
+      "invariants": [
+        "Fatal error patterns always force action='abort' regardless of retry_count/max_retries",
+        "Backoff delay is capped at 300 seconds",
+        "abort clears all pending_renewals and marks them failed, stopping the whole run"
+      ],
+      "contracts": [
+        "error_action_router can trust error_action is always one of retry/skip/abort after this node runs"
+      ],
+      "confidence": 0.85,
+      "evidence": [
+        "agent/nodes/error_handler.py:19-25",
+        "agent/nodes/error_handler.py:96-113",
+        "agent/nodes/error_handler.py:126-135"
+      ],
+      "last_validated": "2026-07-03T22:48:21.996818+00:00",
+      "created_at": "2026-07-03T22:48:21.996818+00:00"
+    },
+    "retry-scheduler-backoff-gate": {
+      "name": "retry-scheduler-backoff-gate",
+      "module": "agent/nodes/retry_scheduler.py",
+      "description": "RetrySchedulerNode synchronously sleeps until state['retry_not_before'] elapses before clearing it, decoupling error-decision (error_handler) from timing enforcement (retry_scheduler) in the graph.",
+      "invariants": [
+        "retry_not_before is always cleared to None after this node runs, whether or not a wait occurred"
+      ],
+      "contracts": [
+        "pick_next_domain is only re-entered for a retry after the scheduled backoff has elapsed"
+      ],
+      "confidence": 0.8,
+      "evidence": [
+        "agent/nodes/retry_scheduler.py:29-49"
+      ],
+      "last_validated": "2026-07-03T22:48:21.997278+00:00",
+      "created_at": "2026-07-03T22:48:21.997278+00:00"
+    },
+    "revocation-graph-best-effort-looping": {
+      "name": "revocation-graph-best-effort-looping",
+      "module": "agent/revocation_graph.py",
+      "description": "The revocation subgraph has no error_handler/retry — cert_revoker failures are logged into failed_revocations and revocation_loop_router unconditionally continues to the next domain, making revocation best-effort across a batch.",
+      "invariants": [
+        "A single domain's revocation failure never halts processing of remaining revocation_targets"
+      ],
+      "contracts": [
+        "revocation_reporter always receives complete revoked_domains/failed_revocations lists after all targets are processed"
+      ],
+      "confidence": 0.85,
+      "evidence": [
+        "agent/revocation_graph.py:16-19",
+        "agent/nodes/revocation_router.py:56-65"
+      ],
+      "last_validated": "2026-07-03T22:48:21.997799+00:00",
+      "created_at": "2026-07-03T22:48:21.997799+00:00"
+    },
+    "claude-cli-llm-provider-no-key-required": {
+      "name": "claude-cli-llm-provider-no-key-required",
+      "module": "llm/factory.py",
+      "description": "make_llm() special-cases LLM_PROVIDER='claude_cli' to shell out to the `claude` binary (--safe-mode --tools none) reusing the caller's existing OAuth login, bypassing the langchain/API-key path entirely and requiring no ANTHROPIC_API_KEY or optional extras.",
+      "invariants": [
+        "claude_cli path never requires langchain to be installed or any API key",
+        "--tools none and --safe-mode are always passed to prevent agentic/tool execution and reduce token overhead"
+      ],
+      "contracts": [
+        "ClaudeCLIChatModel.invoke() returns an object with a .content attribute compatible with langchain's AIMessage interface"
+      ],
+      "confidence": 0.9,
+      "evidence": [
+        "llm/factory.py:33-46",
+        "llm/factory.py:76-100",
+        "llm/factory.py:143-144"
+      ],
+      "last_validated": "2026-07-03T22:48:21.998323+00:00",
+      "created_at": "2026-07-03T22:48:21.998323+00:00"
+    },
+    "node-registry-class-instantiation-factory": {
+      "name": "node-registry-class-instantiation-factory",
+      "module": "agent/nodes/registry.py",
+      "description": "get_node(name) looks up a callable class in NODE_REGISTRY and instantiates it, enforcing that registry entries are classes (not pre-built instances) via an explicit TypeError check.",
+      "invariants": [
+        "Every value in NODE_REGISTRY must be a class (isinstance(..., type)), never a bare function or instance"
+      ],
+      "contracts": [
+        "build_graph()/build_revocation_graph() can call get_node(name) for any registered name and get a fresh callable node instance"
+      ],
+      "confidence": 0.85,
+      "evidence": [
+        "agent/nodes/registry.py:59-72"
+      ],
+      "last_validated": "2026-07-03T22:48:21.998858+00:00",
+      "created_at": "2026-07-03T22:48:21.998858+00:00"
+    },
+    "agent-state-typed-schema": {
+      "name": "agent-state-typed-schema",
+      "module": "agent/state.py",
+      "description": "AgentState is a single shared TypedDict spanning both the renewal graph and revocation graph, with revocation-specific fields (revocation_targets, current_revocation_domain, etc.) coexisting alongside renewal fields even though a given graph only uses one subset.",
+      "invariants": [
+        "messages uses add_messages reducer for LangGraph message accumulation",
+        "acme_account_key is never a field in this TypedDict (kept out of state deliberately)"
+      ],
+      "contracts": [
+        "Both build_graph() and build_revocation_graph() construct/consume the same AgentState shape, differing only in which fields they populate"
+      ],
+      "confidence": 0.85,
+      "evidence": [
+        "agent/state.py:60-104",
+        "agent/state.py:97-104"
+      ],
+      "last_validated": "2026-07-03T22:48:21.999389+00:00",
+      "created_at": "2026-07-03T22:48:21.999389+00:00"
+    }
   }
 }
