@@ -1,8 +1,8 @@
 {
   "meta": {
-    "commit": "",
-    "extracted_at": "",
-    "note": "migrated to meta/concepts format 2026-07-04; original extraction commit unknown"
+    "commit": "4d79b09a1a0699e9807113c883511f6001034b73",
+    "extracted_at": "2026-07-04T03:55:16.785719+00:00",
+    "note": ""
   },
   "concepts": {
     "cert-issuance-mode-strict-exclusivity": {
