@@ -8,21 +8,24 @@
     "cert-issuance-mode-strict-exclusivity": {
       "name": "cert-issuance-mode-strict-exclusivity",
       "module": "config.py",
-      "description": "Settings enforces that a single instance runs either ACME or SPIFFE issuance, never both, via CERT_ISSUANCE_MODE and cross-validating that the other mode's fields are unset/default.",
+      "description": "CERT_ISSUANCE_MODE dispatches construction to exactly one of two separate pydantic classes, AcmeConfig or SpiffeConfig, via the make_settings() factory. The inactive mode's fields do not exist on the constructed object at all (no coercion/defaulting) -- accessing them raises AttributeError. Stray env vars for the inactive mode's fields are logged as a WARNING from inside make_settings().",
       "invariants": [
         "CERT_ISSUANCE_MODE is either 'acme' or 'spiffe', never both active",
-        "In acme mode, SPIRE_AGENT_SOCKET_PATH must remain default and SPIFFE_TRUST_DOMAIN/MANAGED_SPIFFE_IDS must be empty",
-        "In spiffe mode, MANAGED_DOMAINS must be empty and SPIFFE_TRUST_DOMAIN must be set"
+        "Exactly one of AcmeConfig/SpiffeConfig is ever instantiated per process (config.settings)",
+        "config.settings has CA_PROVIDER/MANAGED_DOMAINS/etc only when it is an AcmeConfig, and SPIRE_AGENT_SOCKET_PATH/SPIFFE_TRUST_DOMAIN/MANAGED_SPIFFE_IDS only when it is a SpiffeConfig",
+        "SPIFFE_TRUST_DOMAIN is still a hard requirement (raises) when mode=spiffe -- no sensible default to invent"
       ],
       "contracts": [
-        "Construction-time validation rejects misconfigured mode/field combinations before any network call"
+        "Construction-time validation rejects a misconfigured mode before any network call",
+        "Code paths shared across both modes (agent/nodes/scanner.py, agent/nodes/storage.py) must read mode-specific fields via getattr(config.settings, field, default), never assume presence"
       ],
       "confidence": 0.95,
       "evidence": [
-        "config.py:63",
-        "config.py:204-222"
+        "config.py (AcmeConfig/SpiffeConfig/_ModeBootstrap/make_settings)",
+        "agent/nodes/scanner.py",
+        "agent/nodes/storage.py"
       ],
-      "last_validated": "2026-07-03T22:48:21.984690+00:00",
+      "last_validated": "2026-07-04T04:56:55.540478+00:00",
       "created_at": "2026-07-03T22:48:21.984690+00:00"
     },
     "csv-fallback-settings-source": {
