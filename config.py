@@ -52,7 +52,14 @@ class _CSVDotEnvSource(_CommaFallbackMixin, DotEnvSettingsSource):
 
 
 class _BaseAppSettings(BaseSettings):
-    """Fields and validators consulted regardless of CERT_ISSUANCE_MODE."""
+    """Fields and validators consulted regardless of CERT_ISSUANCE_MODE.
+
+    AcmeConfig and SpiffeConfig share only what's declared here — each mode's
+    own fields don't exist on the other's instance at all. Code paths shared
+    between the two graphs (e.g. agent/nodes/scanner.py, storage.py) must read
+    mode-specific fields via getattr(config.settings, "FIELD", default), never
+    assume presence.
+    """
 
     model_config = SettingsConfigDict(
         env_file=".env",
