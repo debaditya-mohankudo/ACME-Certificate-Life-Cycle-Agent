@@ -13,6 +13,7 @@ Covers:
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -22,8 +23,21 @@ from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.x509.oid import NameOID
 import datetime
 
+import config
 from agent.nodes.spiffe_attestor import SpiffeAttestorNode
 from agent.state import AgentState
+
+
+@pytest.fixture(autouse=True)
+def _spiffe_settings_stub():
+    """spiffe_attestor.py only reads SPIRE_AGENT_SOCKET_PATH — SPIRE_AGENT_SOCKET_PATH
+    only exists on SpiffeConfig, not the default AcmeConfig singleton, so these
+    unit tests (which don't exercise the full graph/config factory) need a
+    minimal stand-in rather than a real SpiffeConfig."""
+    original_settings = config.settings
+    config.settings = SimpleNamespace(SPIRE_AGENT_SOCKET_PATH="/tmp/spire-agent/public/api.sock")
+    yield
+    config.settings = original_settings
 
 
 def _make_self_signed_cert(common_name: str):

@@ -57,9 +57,13 @@ class CertificateScannerNode:
                     "detected_ca_provider": None,
                 }
             else:
-                if config.settings.CA_PROVIDER == "custom":
+                # CA_PROVIDER only exists on AcmeConfig — this node is shared with the
+                # spiffe graph (agent/graph.py), where config.settings is a SpiffeConfig
+                # and has no such attribute.
+                ca_provider = getattr(config.settings, "CA_PROVIDER", None)
+                if ca_provider == "custom":
                     detected_ca = fs.detect_ca_for_domain(cert_store_path, domain, pem)
-                    _warn_if_ca_mismatch(domain, detected_ca, config.settings.CA_PROVIDER)
+                    _warn_if_ca_mismatch(domain, detected_ca, ca_provider)
                 else:
                     detected_ca = None
 

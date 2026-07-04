@@ -80,31 +80,20 @@ requires_spire = pytest.mark.skipif(
 
 
 # ─── Settings patch ───────────────────────────────────────────────────────────
+# AcmeConfig/SpiffeConfig are two separate classes — only one is ever
+# instantiated (config.make_settings()), so these fixtures swap the whole
+# config.settings singleton object rather than mutating individual fields.
 
 @pytest.fixture()
 def pebble_settings(tmp_path: Path):
     """
-    Mutate the live settings singleton to point at local Pebble,
-    restore original values after the test.
+    Replace the live settings singleton with an AcmeConfig pointed at local
+    Pebble, restore the original singleton object after the test.
     """
-    from config import settings
+    import config
+    from config import AcmeConfig
 
-    originals = {
-        "CA_PROVIDER":        settings.CA_PROVIDER,
-        "ACME_DIRECTORY_URL": settings.ACME_DIRECTORY_URL,
-        "ACME_EAB_KEY_ID":    settings.ACME_EAB_KEY_ID,
-        "ACME_EAB_HMAC_KEY":  settings.ACME_EAB_HMAC_KEY,
-        "MANAGED_DOMAINS":    settings.MANAGED_DOMAINS,
-        "CERT_STORE_PATH":    settings.CERT_STORE_PATH,
-        "ACCOUNT_KEY_PATH":   settings.ACCOUNT_KEY_PATH,
-        "HTTP_CHALLENGE_MODE": settings.HTTP_CHALLENGE_MODE,
-        "WEBROOT_PATH":       settings.WEBROOT_PATH,
-        "ACME_INSECURE":      settings.ACME_INSECURE,
-        "ACME_CA_BUNDLE":     settings.ACME_CA_BUNDLE,
-        "MAX_RETRIES":        settings.MAX_RETRIES,
-        "ANTHROPIC_API_KEY":  settings.ANTHROPIC_API_KEY,
-        "LLM_DISABLED":       settings.LLM_DISABLED,
-    }
+    original_settings = config.settings
 
     webroot = tmp_path / "webroot"
     webroot.mkdir()
@@ -112,24 +101,25 @@ def pebble_settings(tmp_path: Path):
     cert_store.mkdir()
     account_key = tmp_path / "account.key"
 
-    settings.CA_PROVIDER        = "custom"
-    settings.ACME_DIRECTORY_URL = f"https://{_PEBBLE_HOST}:14000/dir"
-    settings.ACME_EAB_KEY_ID    = ""
-    settings.ACME_EAB_HMAC_KEY  = ""
-    settings.MANAGED_DOMAINS    = ["acme-test.localhost"]
-    settings.CERT_STORE_PATH    = str(cert_store)
-    settings.ACCOUNT_KEY_PATH   = str(account_key)
-    settings.HTTP_CHALLENGE_MODE = "webroot"
-    settings.WEBROOT_PATH       = str(webroot)
-    settings.ACME_INSECURE      = True
-    settings.ACME_CA_BUNDLE     = ""
-    settings.MAX_RETRIES        = 1
-    settings.ANTHROPIC_API_KEY  = "dummy-key-for-testing"  # For LLM credential check
+    config.settings = AcmeConfig(
+        CA_PROVIDER="custom",
+        ACME_DIRECTORY_URL=f"https://{_PEBBLE_HOST}:14000/dir",
+        ACME_EAB_KEY_ID="",
+        ACME_EAB_HMAC_KEY="",
+        MANAGED_DOMAINS=["acme-test.localhost"],
+        CERT_STORE_PATH=str(cert_store),
+        ACCOUNT_KEY_PATH=str(account_key),
+        HTTP_CHALLENGE_MODE="webroot",
+        WEBROOT_PATH=str(webroot),
+        ACME_INSECURE=True,
+        ACME_CA_BUNDLE="",
+        MAX_RETRIES=1,
+        ANTHROPIC_API_KEY="dummy-key-for-testing",  # For LLM credential check
+    )
 
-    yield settings
+    yield config.settings
 
-    for k, v in originals.items():
-        setattr(settings, k, v)
+    config.settings = original_settings
 
 
 # ─── DNS-01 settings fixture ──────────────────────────────────────────────────
@@ -138,25 +128,17 @@ def pebble_settings(tmp_path: Path):
 def dns_settings(pebble_settings):
     """
     Extend pebble_settings to use DNS-01 challenge mode with a mocked provider.
+
+    Mutates the already-swapped AcmeConfig instance's attrs directly — no
+    separate restore needed, since pebble_settings' own teardown discards the
+    whole object (DNS-field mutations included).
     """
-    from config import settings
+    pebble_settings.HTTP_CHALLENGE_MODE = "dns"
+    pebble_settings.DNS_PROVIDER = "cloudflare"
+    pebble_settings.DNS_PROPAGATION_WAIT_SECONDS = 0
+    pebble_settings.CLOUDFLARE_API_TOKEN = "fake-token-for-testing"
 
-    dns_originals = {
-        "HTTP_CHALLENGE_MODE":        settings.HTTP_CHALLENGE_MODE,
-        "DNS_PROVIDER":               settings.DNS_PROVIDER,
-        "DNS_PROPAGATION_WAIT_SECONDS": settings.DNS_PROPAGATION_WAIT_SECONDS,
-        "CLOUDFLARE_API_TOKEN":       settings.CLOUDFLARE_API_TOKEN,
-    }
-
-    settings.HTTP_CHALLENGE_MODE = "dns"
-    settings.DNS_PROVIDER = "cloudflare"
-    settings.DNS_PROPAGATION_WAIT_SECONDS = 0
-    settings.CLOUDFLARE_API_TOKEN = "fake-token-for-testing"
-
-    yield settings
-
-    for k, v in dns_originals.items():
-        setattr(settings, k, v)
+    yield pebble_settings
 
 
 # ─── SPIRE settings fixture ────────────────────────────────────────────────────
@@ -164,37 +146,29 @@ def dns_settings(pebble_settings):
 @pytest.fixture()
 def spire_settings(tmp_path: Path):
     """
-    Mutate the live settings singleton to point at the local SPIRE harness,
-    restore original values after the test. Mirrors pebble_settings.
+    Replace the live settings singleton with a SpiffeConfig pointed at the
+    local SPIRE harness, restore the original singleton object after the test.
     """
-    from config import settings
+    import config
+    from config import SpiffeConfig
 
-    originals = {
-        "CERT_ISSUANCE_MODE":      settings.CERT_ISSUANCE_MODE,
-        "SPIRE_AGENT_SOCKET_PATH": settings.SPIRE_AGENT_SOCKET_PATH,
-        "SPIFFE_TRUST_DOMAIN":     settings.SPIFFE_TRUST_DOMAIN,
-        "MANAGED_SPIFFE_IDS":      settings.MANAGED_SPIFFE_IDS,
-        "CERT_STORE_PATH":         settings.CERT_STORE_PATH,
-        "MAX_RETRIES":             settings.MAX_RETRIES,
-        "ANTHROPIC_API_KEY":       settings.ANTHROPIC_API_KEY,
-        "LLM_DISABLED":            settings.LLM_DISABLED,
-    }
+    original_settings = config.settings
 
     cert_store = tmp_path / "certs"
     cert_store.mkdir()
 
-    settings.CERT_ISSUANCE_MODE = "spiffe"
-    settings.SPIRE_AGENT_SOCKET_PATH = _SPIRE_AGENT_SOCKET_PATH
-    settings.SPIFFE_TRUST_DOMAIN = "example.org"
-    settings.MANAGED_SPIFFE_IDS = ["spiffe://example.org/workload/demo"]
-    settings.CERT_STORE_PATH = str(cert_store)
-    settings.MAX_RETRIES = 1
-    settings.ANTHROPIC_API_KEY = "dummy-key-for-testing"
+    config.settings = SpiffeConfig(
+        SPIRE_AGENT_SOCKET_PATH=_SPIRE_AGENT_SOCKET_PATH,
+        SPIFFE_TRUST_DOMAIN="example.org",
+        MANAGED_SPIFFE_IDS=["spiffe://example.org/workload/demo"],
+        CERT_STORE_PATH=str(cert_store),
+        MAX_RETRIES=1,
+        ANTHROPIC_API_KEY="dummy-key-for-testing",
+    )
 
-    yield settings
+    yield config.settings
 
-    for k, v in originals.items():
-        setattr(settings, k, v)
+    config.settings = original_settings
 
 
 # ─── LLM mock helpers ─────────────────────────────────────────────────────────

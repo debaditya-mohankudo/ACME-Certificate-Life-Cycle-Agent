@@ -4,13 +4,29 @@ set for each CERT_ISSUANCE_MODE value.
 """
 from __future__ import annotations
 
+import importlib
+
 import pytest
+
+
+@pytest.fixture(autouse=True)
+def _restore_config_module_state():
+    """importlib.reload(config) re-executes make_settings(), permanently
+    replacing config.settings for the rest of the process (AcmeConfig and
+    SpiffeConfig are separate classes now — there's no shared fallback
+    attribute the way the old flat Settings class had). Reload back to the
+    default acme-mode state after each test in this file so later tests
+    (elsewhere in the suite) don't inherit a SpiffeConfig singleton."""
+    yield
+    import config
+    importlib.reload(config)
+    import agent.graph
+    importlib.reload(agent.graph)
 
 
 def test_acme_mode_wires_acme_nodes(monkeypatch):
     monkeypatch.setenv("CERT_ISSUANCE_MODE", "acme")
     import config
-    import importlib
     importlib.reload(config)
 
     import agent.graph
@@ -35,7 +51,6 @@ def test_spiffe_mode_wires_spiffe_nodes(monkeypatch):
     monkeypatch.setenv("CERT_ISSUANCE_MODE", "spiffe")
     monkeypatch.setenv("SPIFFE_TRUST_DOMAIN", "example.org")
     import config
-    import importlib
     importlib.reload(config)
 
     import agent.graph

@@ -876,7 +876,7 @@ class TestConfigValidation:
         """HTTP_CHALLENGE_MODE='dns' passes validation."""
         from pydantic import ValidationError
 
-        from config import Settings
+        from config import AcmeConfig as Settings
 
         # Build a Settings object with dns mode — should not raise
         s = Settings(
@@ -893,7 +893,7 @@ class TestConfigValidation:
         """HTTP_CHALLENGE_MODE='ftp' is rejected."""
         from pydantic import ValidationError
 
-        from config import Settings
+        from config import AcmeConfig as Settings
 
         with pytest.raises((ValidationError, ValueError)):
             Settings(
@@ -905,7 +905,7 @@ class TestConfigValidation:
         """DNS mode with cloudflare provider and no token raises ValueError."""
         from pydantic import ValidationError
 
-        from config import Settings
+        from config import AcmeConfig as Settings
 
         with pytest.raises((ValidationError, ValueError)):
             Settings(
@@ -920,7 +920,7 @@ class TestConfigValidation:
         """DNS mode with google provider and no project_id raises ValueError."""
         from pydantic import ValidationError
 
-        from config import Settings
+        from config import AcmeConfig as Settings
 
         with pytest.raises((ValidationError, ValueError)):
             Settings(
@@ -933,7 +933,7 @@ class TestConfigValidation:
 
     def test_route53_no_mandatory_fields(self):
         """Route53 uses credential chain — no mandatory fields required."""
-        from config import Settings
+        from config import AcmeConfig as Settings
 
         s = Settings(
             HTTP_CHALLENGE_MODE="dns",
@@ -946,7 +946,7 @@ class TestConfigValidation:
 
     def test_standalone_mode_unchanged(self):
         """standalone mode validation is unaffected by DNS changes."""
-        from config import Settings
+        from config import AcmeConfig as Settings
 
         s = Settings(
             HTTP_CHALLENGE_MODE="standalone",
@@ -959,7 +959,7 @@ class TestConfigValidation:
         """webroot mode still requires WEBROOT_PATH."""
         from pydantic import ValidationError
 
-        from config import Settings
+        from config import AcmeConfig as Settings
 
         with pytest.raises((ValidationError, ValueError), match="WEBROOT_PATH"):
             Settings(

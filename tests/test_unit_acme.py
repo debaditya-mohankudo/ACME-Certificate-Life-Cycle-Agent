@@ -971,7 +971,7 @@ def test_eab_create_account_raises_when_only_hmac_key_set(account_key):
 def test_config_rejects_partial_eab_key_id_only():
     """Settings raises ValidationError at startup when only ACME_EAB_KEY_ID is set."""
     from pydantic import ValidationError
-    from config import Settings
+    from config import AcmeConfig as Settings
     with pytest.raises(ValidationError, match="ACME_EAB_HMAC_KEY must be set"):
         Settings(
             CA_PROVIDER="digicert",
@@ -984,7 +984,7 @@ def test_config_rejects_partial_eab_key_id_only():
 def test_config_rejects_partial_eab_hmac_only():
     """Settings raises ValidationError at startup when only ACME_EAB_HMAC_KEY is set."""
     from pydantic import ValidationError
-    from config import Settings
+    from config import AcmeConfig as Settings
     with pytest.raises(ValidationError, match="ACME_EAB_KEY_ID must be set"):
         Settings(
             CA_PROVIDER="zerossl",
@@ -996,7 +996,7 @@ def test_config_rejects_partial_eab_hmac_only():
 
 def test_config_accepts_both_eab_credentials_set():
     """Settings accepts valid full EAB configuration."""
-    from config import Settings
+    from config import AcmeConfig as Settings
     s = Settings(
         CA_PROVIDER="digicert",
         ACME_EAB_KEY_ID="my-key-id",
@@ -1008,7 +1008,7 @@ def test_config_accepts_both_eab_credentials_set():
 
 def test_config_accepts_both_eab_credentials_empty():
     """Settings accepts both-empty EAB credentials (defers validation to CA)."""
-    from config import Settings
+    from config import AcmeConfig as Settings
     s = Settings(
         CA_PROVIDER="digicert",
         ACME_EAB_KEY_ID="",
@@ -1021,7 +1021,7 @@ def test_config_accepts_both_eab_credentials_empty():
 def test_config_rejects_domain_key_size_below_2048_for_rsa():
     """Settings raises ValidationError when RSA DOMAIN_KEY_SIZE is below minimum."""
     from pydantic import ValidationError
-    from config import Settings
+    from config import AcmeConfig as Settings
 
     with pytest.raises(ValidationError, match="DOMAIN_KEY_SIZE must be >= 2048 when KEY_TYPE='rsa'"):
         Settings(
@@ -1033,7 +1033,7 @@ def test_config_rejects_domain_key_size_below_2048_for_rsa():
 
 def test_config_accepts_domain_key_size_4096():
     """Settings accepts DOMAIN_KEY_SIZE values >= 2048."""
-    from config import Settings
+    from config import AcmeConfig as Settings
 
     s = Settings(
         KEY_TYPE="rsa",
@@ -1045,7 +1045,7 @@ def test_config_accepts_domain_key_size_4096():
 
 def test_config_accepts_ecc_with_default_curve():
     """Settings accepts KEY_TYPE=ecc with default ECC curve."""
-    from config import Settings
+    from config import AcmeConfig as Settings
 
     s = Settings(
         KEY_TYPE="ecc",
@@ -1057,7 +1057,7 @@ def test_config_accepts_ecc_with_default_curve():
 
 def test_config_accepts_ecc_with_explicit_curve():
     """Settings accepts explicit ECC curve when KEY_TYPE=ecc."""
-    from config import Settings
+    from config import AcmeConfig as Settings
 
     s = Settings(
         KEY_TYPE="ecc",
@@ -1071,7 +1071,7 @@ def test_config_accepts_ecc_with_explicit_curve():
 def test_config_rejects_ecc_without_curve():
     """Settings rejects KEY_TYPE=ecc when ECC_CURVE is empty."""
     from pydantic import ValidationError
-    from config import Settings
+    from config import AcmeConfig as Settings
 
     with pytest.raises(ValidationError, match="ECC_CURVE"):
         Settings(

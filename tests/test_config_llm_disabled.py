@@ -15,7 +15,7 @@ from pathlib import Path
 
 def test_llm_disabled_default_is_true():
     """LLM_DISABLED defaults to True (deterministic mode, no LLM packages required)."""
-    from config import Settings
+    from config import AcmeConfig as Settings
 
     settings = Settings()
     assert settings.LLM_DISABLED is True
@@ -24,7 +24,7 @@ def test_llm_disabled_default_is_true():
 def test_llm_disabled_can_be_set_true(monkeypatch):
     """LLM_DISABLED can be set to True via environment variable."""
     monkeypatch.setenv("LLM_DISABLED", "true")
-    from config import Settings
+    from config import AcmeConfig as Settings
 
     settings = Settings()
     assert settings.LLM_DISABLED is True
@@ -33,7 +33,7 @@ def test_llm_disabled_can_be_set_true(monkeypatch):
 def test_llm_disabled_can_be_set_false(monkeypatch):
     """LLM_DISABLED can be explicitly set to False."""
     monkeypatch.setenv("LLM_DISABLED", "false")
-    from config import Settings
+    from config import AcmeConfig as Settings
 
     settings = Settings()
     assert settings.LLM_DISABLED is False
@@ -42,7 +42,7 @@ def test_llm_disabled_can_be_set_false(monkeypatch):
 def test_llm_disabled_case_insensitive(monkeypatch):
     """LLM_DISABLED is case-insensitive (Pydantic BaseSettings default)."""
     monkeypatch.setenv("llm_disabled", "True")
-    from config import Settings
+    from config import AcmeConfig as Settings
 
     settings = Settings()
     assert settings.LLM_DISABLED is True
@@ -53,7 +53,7 @@ def test_llm_disabled_from_env_file(tmp_path: Path):
     env_file = tmp_path / ".env"
     env_file.write_text("LLM_DISABLED=true\n")
 
-    from config import Settings
+    from config import AcmeConfig as Settings
     from pydantic_settings import SettingsConfigDict
 
     # Create settings pointing to our test .env
@@ -70,7 +70,7 @@ def test_llm_disabled_from_env_file(tmp_path: Path):
 
 def test_llm_disabled_does_not_require_llm_provider():
     """When LLM_DISABLED=True, LLM_PROVIDER validation is not enforced."""
-    from config import Settings
+    from config import AcmeConfig as Settings
 
     # Even though LLM_PROVIDER might be invalid, if LLM_DISABLED=true,
     # it should not be accessed. Config should load without API key.
@@ -84,7 +84,7 @@ def test_llm_disabled_does_not_require_llm_provider():
 
 def test_llm_disabled_works_with_any_ca_provider():
     """LLM_DISABLED is independent of CA_PROVIDER selection."""
-    from config import Settings
+    from config import AcmeConfig as Settings
 
     for ca in ["digicert", "letsencrypt", "zerossl", "sectigo"]:
         settings = Settings(
@@ -97,7 +97,7 @@ def test_llm_disabled_works_with_any_ca_provider():
 
 def test_llm_disabled_works_with_custom_ca_provider():
     """LLM_DISABLED works with custom CA provider (requires ACME_DIRECTORY_URL)."""
-    from config import Settings
+    from config import AcmeConfig as Settings
 
     settings = Settings(
         LLM_DISABLED=True,
@@ -110,7 +110,7 @@ def test_llm_disabled_works_with_custom_ca_provider():
 
 def test_llm_disabled_works_with_standalone_challenge_mode(tmp_path):
     """LLM_DISABLED is independent of challenge mode (standalone)."""
-    from config import Settings
+    from config import AcmeConfig as Settings
 
     settings = Settings(
         LLM_DISABLED=True,
@@ -122,7 +122,7 @@ def test_llm_disabled_works_with_standalone_challenge_mode(tmp_path):
 
 def test_llm_disabled_works_with_webroot_challenge_mode(tmp_path):
     """LLM_DISABLED is independent of challenge mode (webroot)."""
-    from config import Settings
+    from config import AcmeConfig as Settings
 
     webroot = tmp_path / "webroot"
     webroot.mkdir()
@@ -138,7 +138,7 @@ def test_llm_disabled_works_with_webroot_challenge_mode(tmp_path):
 
 def test_llm_disabled_is_boolean_type():
     """LLM_DISABLED field is strictly boolean."""
-    from config import Settings
+    from config import AcmeConfig as Settings
 
     # Valid boolean values
     for val in [True, False, "true", "false", "1", "0"]:
@@ -148,7 +148,7 @@ def test_llm_disabled_is_boolean_type():
 
 def test_llm_disabled_invalid_value_fails():
     """Invalid boolean values are rejected."""
-    from config import Settings
+    from config import AcmeConfig as Settings
     from pydantic import ValidationError
 
     with pytest.raises(ValidationError):
@@ -159,7 +159,7 @@ def test_llm_disabled_env_override_beats_default(monkeypatch):
     """Environment variable overrides default value."""
     monkeypatch.setenv("LLM_DISABLED", "true")
 
-    from config import Settings
+    from config import AcmeConfig as Settings
 
     settings = Settings()
     assert settings.LLM_DISABLED is True
@@ -171,7 +171,7 @@ def test_llm_disabled_with_other_llm_settings(monkeypatch):
     monkeypatch.setenv("LLM_PROVIDER", "anthropic")
     monkeypatch.setenv("LLM_MODEL_PLANNER", "claude-haiku-4-5-20251001")
 
-    from config import Settings
+    from config import AcmeConfig as Settings
 
     settings = Settings()
     assert settings.LLM_DISABLED is True
@@ -192,7 +192,7 @@ def test_llm_disabled_singleton_mutation(pebble_settings):
 
 def test_llm_disabled_accepts_yes_no_strings(monkeypatch):
     """LLM_DISABLED accepts 'yes'/'no' strings."""
-    from config import Settings
+    from config import AcmeConfig as Settings
 
     for yes_val in ["yes", "YES", "Yes"]:
         monkeypatch.setenv("LLM_DISABLED", yes_val)
@@ -207,7 +207,7 @@ def test_llm_disabled_accepts_yes_no_strings(monkeypatch):
 
 def test_llm_disabled_accepts_on_off_strings(monkeypatch):
     """LLM_DISABLED accepts 'on'/'off' strings."""
-    from config import Settings
+    from config import AcmeConfig as Settings
 
     monkeypatch.setenv("LLM_DISABLED", "on")
     settings = Settings()
@@ -220,7 +220,7 @@ def test_llm_disabled_accepts_on_off_strings(monkeypatch):
 
 def test_llm_disabled_validator_rejects_invalid_strings():
     """LLM_DISABLED validator rejects nonsense strings."""
-    from config import Settings
+    from config import AcmeConfig as Settings
     from pydantic import ValidationError
 
     with pytest.raises(ValidationError) as exc_info:
@@ -231,7 +231,7 @@ def test_llm_disabled_validator_rejects_invalid_strings():
 
 def test_llm_disabled_validator_accepts_int_0_and_1():
     """LLM_DISABLED validator accepts integer 0 and 1."""
-    from config import Settings
+    from config import AcmeConfig as Settings
 
     settings = Settings(LLM_DISABLED=1)
     assert settings.LLM_DISABLED is True
@@ -242,7 +242,7 @@ def test_llm_disabled_validator_accepts_int_0_and_1():
 
 def test_llm_disabled_int_with_whitespace(monkeypatch):
     """LLM_DISABLED handles string integers with whitespace."""
-    from config import Settings
+    from config import AcmeConfig as Settings
 
     monkeypatch.setenv("LLM_DISABLED", "  1  ")
     settings = Settings()

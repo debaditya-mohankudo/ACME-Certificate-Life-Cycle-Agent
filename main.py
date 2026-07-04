@@ -309,12 +309,18 @@ def build_settings_from_override(
     acme_directory_url: str | None = None,
     base_settings: Any | None = None,
 ) -> Any:
-    """Build an explicit Settings object from base settings plus optional overrides."""
+    """Build an explicit AcmeConfig object from base settings plus optional overrides."""
     import config
 
     effective_base = base_settings or config.settings
     if not ca_provider and not acme_directory_url:
         return effective_base
+
+    if not isinstance(effective_base, config.AcmeConfig):
+        raise ValueError(
+            "CA provider overrides only apply in acme mode "
+            f"(current CERT_ISSUANCE_MODE={effective_base.CERT_ISSUANCE_MODE!r})"
+        )
 
     data = effective_base.model_dump()
     if ca_provider is not None:
@@ -322,7 +328,7 @@ def build_settings_from_override(
     if acme_directory_url is not None:
         data["ACME_DIRECTORY_URL"] = acme_directory_url
 
-    return config.Settings(**data)
+    return config.AcmeConfig(**data)
 
 
 def apply_runtime_settings_overrides(

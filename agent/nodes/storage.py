@@ -62,7 +62,9 @@ class StorageManagerNode:
                 chain_pem=chain_pem,
                 privkey_pem=privkey_pem,
                 acme_order_url=order.get("order_url", ""),
-                ca_provider=config.settings.CA_PROVIDER,
+                # CA_PROVIDER only exists on AcmeConfig — this node is shared with the
+                # spiffe graph (agent/graph.py), where config.settings is a SpiffeConfig.
+                ca_provider=getattr(config.settings, "CA_PROVIDER", "spiffe"),
             )
         except Exception as exc:
             error = f"storage_manager: failed to write PEM files for {domain}: {exc}"
