@@ -81,6 +81,13 @@ def test_second_run_reuses_account(pebble_settings, mock_llm_nodes, tmp_path):
     """
     On a second run with the same account key, the agent looks up the existing
     account instead of creating a new one.
+
+    Uses a renewal_threshold_days large enough to force renewal regardless of
+    the actual cert TTL Pebble issues (observed to vary ~5-90 days across runs
+    — a threshold of 1 day is not reliably below that, see task:0d444f02).
+    Reuse itself is verified directly via the account key file's mtime/bytes
+    and the resulting acme_account_url, rather than inferred from a renewal
+    firing on the second run.
     """
     from agent.graph import build_graph, initial_state
 
@@ -92,7 +99,7 @@ def test_second_run_reuses_account(pebble_settings, mock_llm_nodes, tmp_path):
                 managed_domains=pebble_settings.MANAGED_DOMAINS,
                 cert_store_path=pebble_settings.CERT_STORE_PATH,
                 account_key_path=pebble_settings.ACCOUNT_KEY_PATH,
-                renewal_threshold_days=1,   # force renewal every run
+                renewal_threshold_days=9999,   # force renewal regardless of issued cert TTL
                 max_retries=1,
                 webroot_path=pebble_settings.WEBROOT_PATH,
             )
@@ -102,9 +109,18 @@ def test_second_run_reuses_account(pebble_settings, mock_llm_nodes, tmp_path):
     assert "acme-test.localhost" in first["completed_renewals"]
 
     # Account key file now exists — second run must reuse it
-    assert Path(pebble_settings.ACCOUNT_KEY_PATH).exists()
+    account_key_path = Path(pebble_settings.ACCOUNT_KEY_PATH)
+    assert account_key_path.exists()
+    mtime_before = account_key_path.stat().st_mtime
+    bytes_before = account_key_path.read_bytes()
+
     second = run()
     assert "acme-test.localhost" in second["completed_renewals"]
+
+    # Reused, not recreated: same account URL, key file untouched
+    assert second["acme_account_url"] == first["acme_account_url"]
+    assert account_key_path.stat().st_mtime == mtime_before
+    assert account_key_path.read_bytes() == bytes_before
 
 
 @requires_pebble
