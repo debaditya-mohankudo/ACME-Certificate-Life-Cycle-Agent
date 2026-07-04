@@ -246,28 +246,52 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_cert_issuance_mode_fields(self) -> "Settings":
-        """Reject ACME/SPIFFE fields set for the wrong CERT_ISSUANCE_MODE.
+        """Coerce ACME/SPIFFE fields left over from the other CERT_ISSUANCE_MODE to their
+        empty/default value, logging each coercion loudly (WARNING, not just INFO).
 
         The two flows have incompatible subjects, auth models, and "what to
-        manage" identifiers (see config.py's SPIFFE/SPIRE section comment) —
-        catching a misconfigured mix here, at construction time, is cheaper
-        than discovering it mid-run.
+        manage" identifiers (see config.py's SPIFFE/SPIRE section comment) — a
+        single instance only ever consults one group of fields, so a value
+        left over from the other mode (e.g. switching CERT_ISSUANCE_MODE back
+        without also clearing the other mode's .env fields) is never actually
+        read; coercing it to empty/default keeps the two configs independent
+        of each other rather than making the user manually keep them in sync.
+
+        SPIFFE_TRUST_DOMAIN when CERT_ISSUANCE_MODE='spiffe' is the one
+        exception — there's no sensible default to coerce a *missing*
+        required value to, so that case still raises.
         """
         if self.CERT_ISSUANCE_MODE == "acme":
-            if self.SPIRE_AGENT_SOCKET_PATH != "/tmp/spire-agent/public/api.sock":
-                raise ValueError(
-                    "SPIRE_AGENT_SOCKET_PATH must not be set when CERT_ISSUANCE_MODE='acme'"
+            default_socket = type(self).model_fields["SPIRE_AGENT_SOCKET_PATH"].default
+            if self.SPIRE_AGENT_SOCKET_PATH != default_socket:
+                logger.warning(
+                    "CERT_ISSUANCE_MODE='acme': ignoring SPIRE_AGENT_SOCKET_PATH=%r, "
+                    "resetting to default %r (not consulted in acme mode)",
+                    self.SPIRE_AGENT_SOCKET_PATH, default_socket,
                 )
-            if self.SPIFFE_TRUST_DOMAIN or self.MANAGED_SPIFFE_IDS:
-                raise ValueError(
-                    "SPIFFE_TRUST_DOMAIN/MANAGED_SPIFFE_IDS must not be set "
-                    "when CERT_ISSUANCE_MODE='acme'"
+                self.SPIRE_AGENT_SOCKET_PATH = default_socket
+            if self.SPIFFE_TRUST_DOMAIN:
+                logger.warning(
+                    "CERT_ISSUANCE_MODE='acme': ignoring SPIFFE_TRUST_DOMAIN=%r, "
+                    "clearing it (not consulted in acme mode)",
+                    self.SPIFFE_TRUST_DOMAIN,
                 )
+                self.SPIFFE_TRUST_DOMAIN = ""
+            if self.MANAGED_SPIFFE_IDS:
+                logger.warning(
+                    "CERT_ISSUANCE_MODE='acme': ignoring MANAGED_SPIFFE_IDS=%r, "
+                    "clearing it (not consulted in acme mode)",
+                    self.MANAGED_SPIFFE_IDS,
+                )
+                self.MANAGED_SPIFFE_IDS = []
         elif self.CERT_ISSUANCE_MODE == "spiffe":
             if self.MANAGED_DOMAINS:
-                raise ValueError(
-                    "MANAGED_DOMAINS must not be set when CERT_ISSUANCE_MODE='spiffe'"
+                logger.warning(
+                    "CERT_ISSUANCE_MODE='spiffe': ignoring MANAGED_DOMAINS=%r, "
+                    "clearing it (not consulted in spiffe mode)",
+                    self.MANAGED_DOMAINS,
                 )
+                self.MANAGED_DOMAINS = []
             if not self.SPIFFE_TRUST_DOMAIN:
                 raise ValueError(
                     "SPIFFE_TRUST_DOMAIN must be set when CERT_ISSUANCE_MODE='spiffe'"

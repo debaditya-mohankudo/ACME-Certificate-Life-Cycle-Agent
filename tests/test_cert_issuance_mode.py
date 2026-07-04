@@ -5,9 +5,9 @@ ACME and SPIFFE issuance flows.
 Verifies:
 - Default is "acme" (backwards compatible with existing deployments)
 - Valid acme-mode and spiffe-mode configs both construct cleanly
-- ACME-only fields set while mode="spiffe" are rejected
-- SPIFFE-only fields set while mode="acme" are rejected
-- spiffe mode requires SPIFFE_TRUST_DOMAIN
+- ACME-only fields left set while mode="spiffe" are coerced to empty, loudly (WARNING)
+- SPIFFE-only fields left set while mode="acme" are coerced to empty/default, loudly (WARNING)
+- spiffe mode still hard-requires SPIFFE_TRUST_DOMAIN (no sensible value to coerce a missing one to)
 - Existing ACME-only validators (EAB, webroot, DNS) are skipped entirely in spiffe mode
 """
 from __future__ import annotations
@@ -49,41 +49,49 @@ def test_spiffe_mode_requires_trust_domain(monkeypatch):
         Settings()
 
 
-def test_spiffe_mode_rejects_managed_domains(monkeypatch):
+def test_spiffe_mode_coerces_managed_domains_to_empty(monkeypatch, caplog):
     monkeypatch.setenv("CERT_ISSUANCE_MODE", "spiffe")
     monkeypatch.setenv("SPIFFE_TRUST_DOMAIN", "example.org")
     monkeypatch.setenv("MANAGED_DOMAINS", "foo.com")
     from config import Settings
 
-    with pytest.raises(ValueError, match="MANAGED_DOMAINS must not be set"):
-        Settings()
+    with caplog.at_level("WARNING"):
+        settings = Settings()
+    assert settings.MANAGED_DOMAINS == []
+    assert "ignoring MANAGED_DOMAINS" in caplog.text
 
 
-def test_acme_mode_rejects_spire_agent_socket_path(monkeypatch):
+def test_acme_mode_coerces_spire_agent_socket_path_to_default(monkeypatch, caplog):
     monkeypatch.setenv("CERT_ISSUANCE_MODE", "acme")
     monkeypatch.setenv("SPIRE_AGENT_SOCKET_PATH", "/custom/socket.sock")
     from config import Settings
 
-    with pytest.raises(ValueError, match="SPIRE_AGENT_SOCKET_PATH must not be set"):
-        Settings()
+    with caplog.at_level("WARNING"):
+        settings = Settings()
+    assert settings.SPIRE_AGENT_SOCKET_PATH == "/tmp/spire-agent/public/api.sock"
+    assert "ignoring SPIRE_AGENT_SOCKET_PATH" in caplog.text
 
 
-def test_acme_mode_rejects_spiffe_trust_domain(monkeypatch):
+def test_acme_mode_coerces_spiffe_trust_domain_to_empty(monkeypatch, caplog):
     monkeypatch.setenv("CERT_ISSUANCE_MODE", "acme")
     monkeypatch.setenv("SPIFFE_TRUST_DOMAIN", "example.org")
     from config import Settings
 
-    with pytest.raises(ValueError, match="SPIFFE_TRUST_DOMAIN/MANAGED_SPIFFE_IDS must not be set"):
-        Settings()
+    with caplog.at_level("WARNING"):
+        settings = Settings()
+    assert settings.SPIFFE_TRUST_DOMAIN == ""
+    assert "ignoring SPIFFE_TRUST_DOMAIN" in caplog.text
 
 
-def test_acme_mode_rejects_managed_spiffe_ids(monkeypatch):
+def test_acme_mode_coerces_managed_spiffe_ids_to_empty(monkeypatch, caplog):
     monkeypatch.setenv("CERT_ISSUANCE_MODE", "acme")
     monkeypatch.setenv("MANAGED_SPIFFE_IDS", "spiffe://example.org/workload")
     from config import Settings
 
-    with pytest.raises(ValueError, match="SPIFFE_TRUST_DOMAIN/MANAGED_SPIFFE_IDS must not be set"):
-        Settings()
+    with caplog.at_level("WARNING"):
+        settings = Settings()
+    assert settings.MANAGED_SPIFFE_IDS == []
+    assert "ignoring MANAGED_SPIFFE_IDS" in caplog.text
 
 
 def test_managed_spiffe_ids_accepts_csv_string(monkeypatch):
