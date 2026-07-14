@@ -8,6 +8,8 @@ The lifecycle logic (monitor → plan → issue → renew → revoke) is protoco
 
 Designed for the coming **47-day TLS mandate (2029)**, where automated renewal is not optional.
 
+The lifecycle logic (monitor → plan → issue → renew → revoke) is protocol-agnostic — the ACME RFC 8555 flow is just the current backend. This can be extended to issue **SPIFFE SVIDs** (workload identity certs, e.g. via a SPIFFE/SPIRE-compatible CA) for agentic and service-mesh environments, reusing the same renewal-planning and error-handling graph.
+
 ---
 
 ## Quality & Testing

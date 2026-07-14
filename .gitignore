@@ -44,6 +44,9 @@ Thumbs.db
 *.log
 logs/
 
+# External tool run artifacts (e.g. SeniorDevAgent review_graph checkpoints)
+runs/
+
 # Code RAG index
 .code_embeddings.tvim
 .code_embeddings.meta.json
