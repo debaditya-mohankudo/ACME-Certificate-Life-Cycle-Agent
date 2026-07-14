@@ -1,12 +1,12 @@
 {
   "meta": {
-    "commit": "4d79b09a1a0699e9807113c883511f6001034b73",
+    "commit": "537226e0c7be97d19517385e35523d0b6158c5c4",
     "extracted_at": "2026-07-04T03:55:16.785719+00:00",
-    "note": ""
+    "last_reviewed": "2026-07-14T23:01:26.831965+00:00",
+    "note": "validated at 537226e0c7be97d19517385e35523d0b6158c5c4; deep-corrected evidence for config.py/main.py/scanner.py/storage.py-derived concepts (drifted line ranges from AcmeConfig/SpiffeConfig split + CLI additions), fast-path bumped last_validated for concepts whose module had zero commits since prior extraction commit 4d79b09a1a0699e9807113c883511f6001034b73"
   },
   "concepts": {
     "cert-issuance-mode-strict-exclusivity": {
-      "name": "cert-issuance-mode-strict-exclusivity",
       "module": "config.py",
       "description": "CERT_ISSUANCE_MODE dispatches construction to exactly one of two separate pydantic classes, AcmeConfig or SpiffeConfig, via the make_settings() factory. The inactive mode's fields do not exist on the constructed object at all (no coercion/defaulting) -- accessing them raises AttributeError. Stray env vars for the inactive mode's fields are logged as a WARNING from inside make_settings().",
       "invariants": [
@@ -25,11 +25,17 @@
         "agent/nodes/scanner.py",
         "agent/nodes/storage.py"
       ],
-      "last_validated": "2026-07-04T04:56:55.540478+00:00",
-      "created_at": "2026-07-03T22:48:21.984690+00:00"
+      "related": [
+        "graph-mode-branching-acme-vs-spiffe",
+        "csv-fallback-settings-source",
+        "eab-all-or-nothing-validation",
+        "acme-directory-preset-resolution"
+      ],
+      "last_validated": "2026-07-14T23:00:44.681391+00:00",
+      "created_at": "2026-07-03T22:48:21.984690+00:00",
+      "name": "cert-issuance-mode-strict-exclusivity"
     },
     "csv-fallback-settings-source": {
-      "name": "csv-fallback-settings-source",
       "module": "config.py",
       "description": "Custom pydantic-settings sources catch JSON-parse failures on List[str] fields and pass the raw string through so field_validators can split on commas, supporting comma-separated env vars.",
       "invariants": [
@@ -40,14 +46,19 @@
       ],
       "confidence": 0.9,
       "evidence": [
-        "config.py:26-45",
-        "config.py:150-163"
+        "config.py:28-51",
+        "config.py:97-111"
       ],
-      "last_validated": "2026-07-03T22:48:21.987760+00:00",
-      "created_at": "2026-07-03T22:48:21.987760+00:00"
+      "related": [
+        "cert-issuance-mode-strict-exclusivity",
+        "eab-all-or-nothing-validation",
+        "acme-directory-preset-resolution"
+      ],
+      "last_validated": "2026-07-14T23:00:44.681391+00:00",
+      "created_at": "2026-07-03T22:48:21.987760+00:00",
+      "name": "csv-fallback-settings-source"
     },
     "eab-all-or-nothing-validation": {
-      "name": "eab-all-or-nothing-validation",
       "module": "config.py",
       "description": "For CA providers requiring External Account Binding (digicert, zerossl, sectigo), both ACME_EAB_KEY_ID and ACME_EAB_HMAC_KEY must be set together or neither.",
       "invariants": [
@@ -58,13 +69,18 @@
       ],
       "confidence": 0.9,
       "evidence": [
-        "config.py:249-262"
+        "config.py:239-251"
       ],
-      "last_validated": "2026-07-03T22:48:21.988009+00:00",
-      "created_at": "2026-07-03T22:48:21.988009+00:00"
+      "related": [
+        "cert-issuance-mode-strict-exclusivity",
+        "acme-directory-preset-resolution",
+        "csv-fallback-settings-source"
+      ],
+      "last_validated": "2026-07-14T23:00:44.681391+00:00",
+      "created_at": "2026-07-03T22:48:21.988009+00:00",
+      "name": "eab-all-or-nothing-validation"
     },
     "acme-directory-preset-resolution": {
-      "name": "acme-directory-preset-resolution",
       "module": "config.py",
       "description": "Resolves ACME_DIRECTORY_URL from a CA_PROVIDER preset map unless CA_PROVIDER is 'custom', in which case ACME_DIRECTORY_URL must be explicitly provided; also warns on deprecated DIGICERT_* env vars.",
       "invariants": [
@@ -75,13 +91,18 @@
       ],
       "confidence": 0.9,
       "evidence": [
-        "config.py:283-306"
+        "config.py:277-301"
       ],
-      "last_validated": "2026-07-03T22:48:21.988240+00:00",
-      "created_at": "2026-07-03T22:48:21.988240+00:00"
+      "related": [
+        "cert-issuance-mode-strict-exclusivity",
+        "csv-fallback-settings-source",
+        "eab-all-or-nothing-validation"
+      ],
+      "last_validated": "2026-07-14T23:00:44.681391+00:00",
+      "created_at": "2026-07-03T22:48:21.988240+00:00",
+      "name": "acme-directory-preset-resolution"
     },
     "cli-readonly-query-commands": {
-      "name": "cli-readonly-query-commands",
       "module": "main.py",
       "description": "CLI entry point distinguishes state-changing commands (--once, --schedule, --revoke-cert) from strictly read-only query commands (--expiring-in-30-days, --domain-status) that never issue/renew/revoke certs.",
       "invariants": [
@@ -92,15 +113,19 @@
       ],
       "confidence": 0.85,
       "evidence": [
-        "main.py:16-22",
-        "main.py:170-207",
-        "main.py:236-292"
+        "main.py:13-18",
+        "main.py:166-197",
+        "main.py:241-305"
       ],
-      "last_validated": "2026-07-03T22:48:21.988493+00:00",
-      "created_at": "2026-07-03T22:48:21.988493+00:00"
+      "related": [
+        "cli-command-registry-dispatch",
+        "runtime-settings-override-singleton-swap"
+      ],
+      "last_validated": "2026-07-14T23:00:44.681391+00:00",
+      "created_at": "2026-07-03T22:48:21.988493+00:00",
+      "name": "cli-readonly-query-commands"
     },
     "cli-command-registry-dispatch": {
-      "name": "cli-command-registry-dispatch",
       "module": "main.py",
       "description": "main() builds a dict mapping action name to (is_selected, handler) and executes the first matching handler, replacing an if/elif chain with a declarative registry.",
       "invariants": [
@@ -112,14 +137,17 @@
       ],
       "confidence": 0.8,
       "evidence": [
-        "main.py:388-431",
-        "main.py:433-437"
+        "main.py:500-513"
       ],
-      "last_validated": "2026-07-03T22:48:21.988787+00:00",
-      "created_at": "2026-07-03T22:48:21.988787+00:00"
+      "related": [
+        "cli-readonly-query-commands",
+        "runtime-settings-override-singleton-swap"
+      ],
+      "last_validated": "2026-07-14T23:00:44.681391+00:00",
+      "created_at": "2026-07-03T22:48:21.988787+00:00",
+      "name": "cli-command-registry-dispatch"
     },
     "runtime-settings-override-singleton-swap": {
-      "name": "runtime-settings-override-singleton-swap",
       "module": "main.py",
       "description": "apply_runtime_settings_overrides replaces the module-level config.settings singleton with a new Settings object built from CLI overrides (--ca-provider/--acme-directory-url), affecting the whole process for that run.",
       "invariants": [
@@ -130,13 +158,18 @@
       ],
       "confidence": 0.85,
       "evidence": [
-        "main.py:317-349"
+        "main.py:334-354"
       ],
-      "last_validated": "2026-07-03T22:48:21.989068+00:00",
-      "created_at": "2026-07-03T22:48:21.989068+00:00"
+      "related": [
+        "cli-readonly-query-commands",
+        "cli-command-registry-dispatch",
+        "mcp-temporary-settings-override-contextmanager"
+      ],
+      "last_validated": "2026-07-14T23:00:44.681391+00:00",
+      "created_at": "2026-07-03T22:48:21.989068+00:00",
+      "name": "runtime-settings-override-singleton-swap"
     },
     "mcp-tool-serialization-lock": {
-      "name": "mcp-tool-serialization-lock",
       "module": "mcp_server.py",
       "description": "State-mutating MCP tools (renew_once, revoke_cert, generate_test_cert, health) acquire a process-wide asyncio.Lock via _operation_lock(required=True) to serialize execution against the shared config.settings singleton override mechanism; read-only tools use required=False and skip locking.",
       "invariants": [
@@ -152,11 +185,16 @@
         "mcp_server.py:146-155",
         "mcp_server.py:333-341"
       ],
-      "last_validated": "2026-07-03T22:48:21.989314+00:00",
-      "created_at": "2026-07-03T22:48:21.989314+00:00"
+      "related": [
+        "mcp-temporary-settings-override-contextmanager",
+        "mcp-ca-input-mode-explicit-resolution",
+        "domain-path-traversal-guard"
+      ],
+      "last_validated": "2026-07-14T23:00:44.681391+00:00",
+      "created_at": "2026-07-03T22:48:21.989314+00:00",
+      "name": "mcp-tool-serialization-lock"
     },
     "mcp-temporary-settings-override-contextmanager": {
-      "name": "mcp-temporary-settings-override-contextmanager",
       "module": "mcp_server.py",
       "description": "_temporary_settings_override swaps config.settings for the duration of a single tool call and restores the original in a finally block, enabling per-call CA overrides without permanently mutating global state (unlike main.py's CLI override).",
       "invariants": [
@@ -169,11 +207,16 @@
       "evidence": [
         "mcp_server.py:83-96"
       ],
-      "last_validated": "2026-07-03T22:48:21.989560+00:00",
-      "created_at": "2026-07-03T22:48:21.989560+00:00"
+      "related": [
+        "mcp-tool-serialization-lock",
+        "mcp-ca-input-mode-explicit-resolution",
+        "runtime-settings-override-singleton-swap"
+      ],
+      "last_validated": "2026-07-14T23:00:44.681391+00:00",
+      "created_at": "2026-07-03T22:48:21.989560+00:00",
+      "name": "mcp-temporary-settings-override-contextmanager"
     },
     "mcp-ca-input-mode-explicit-resolution": {
-      "name": "mcp-ca-input-mode-explicit-resolution",
       "module": "mcp_server.py",
       "description": "_resolve_ca_inputs requires explicit ca_input_mode ('config' or 'custom') rather than inferring from optional params, validating ca_provider against known choices and URL scheme when in 'custom' mode.",
       "invariants": [
@@ -187,11 +230,16 @@
       "evidence": [
         "mcp_server.py:52-81"
       ],
-      "last_validated": "2026-07-03T22:48:21.989815+00:00",
-      "created_at": "2026-07-03T22:48:21.989815+00:00"
+      "related": [
+        "mcp-tool-serialization-lock",
+        "mcp-temporary-settings-override-contextmanager",
+        "domain-path-traversal-guard"
+      ],
+      "last_validated": "2026-07-14T23:00:44.681391+00:00",
+      "created_at": "2026-07-03T22:48:21.989815+00:00",
+      "name": "mcp-ca-input-mode-explicit-resolution"
     },
     "domain-path-traversal-guard": {
-      "name": "domain-path-traversal-guard",
       "module": "mcp_server.py",
       "description": "_validate_domain_for_cert_generation blocks path separators, '..' sequences, and leading dots before a domain string is used to build a filesystem path under CERT_STORE_PATH, in generate_test_cert.",
       "invariants": [
@@ -206,11 +254,15 @@
         "mcp_server.py:117-131",
         "mcp_server.py:414-419"
       ],
-      "last_validated": "2026-07-03T22:48:21.990095+00:00",
-      "created_at": "2026-07-03T22:48:21.990095+00:00"
+      "related": [
+        "mcp-tool-serialization-lock",
+        "mcp-ca-input-mode-explicit-resolution"
+      ],
+      "last_validated": "2026-07-14T23:00:44.681391+00:00",
+      "created_at": "2026-07-03T22:48:21.990095+00:00",
+      "name": "domain-path-traversal-guard"
     },
     "jsonl-structured-logging": {
-      "name": "jsonl-structured-logging",
       "module": "logger.py",
       "description": "JSONLFormatter emits one JSON object per log line including a run_id, merging any extra fields attached via logging's extra= kwarg or filters, with exceptions serialized as a single string field to preserve valid JSONL.",
       "invariants": [
@@ -225,11 +277,15 @@
         "logger.py:10-13",
         "logger.py:22-46"
       ],
-      "last_validated": "2026-07-03T22:48:21.990514+00:00",
-      "created_at": "2026-07-03T22:48:21.990514+00:00"
+      "related": [
+        "logger-singleton-run-id",
+        "acme-error-routing-triad"
+      ],
+      "last_validated": "2026-07-14T23:00:44.681391+00:00",
+      "created_at": "2026-07-03T22:48:21.990514+00:00",
+      "name": "jsonl-structured-logging"
     },
     "logger-singleton-run-id": {
-      "name": "logger-singleton-run-id",
       "module": "logger.py",
       "description": "LoggerWithRunID is a process-wide singleton (via __new__ check) ensuring a single run_id is stamped on all log lines for the process lifetime, wrapping a LoggerDecorator that adds the RunIDFilter and JSONL handler.",
       "invariants": [
@@ -244,16 +300,20 @@
         "logger.py:139-149",
         "logger.py:151-162"
       ],
-      "last_validated": "2026-07-03T22:48:21.990787+00:00",
-      "created_at": "2026-07-03T22:48:21.990787+00:00"
+      "related": [
+        "jsonl-structured-logging",
+        "acme-error-routing-triad"
+      ],
+      "last_validated": "2026-07-14T23:00:44.681391+00:00",
+      "created_at": "2026-07-03T22:48:21.990787+00:00",
+      "name": "logger-singleton-run-id"
     },
     "graph-mode-branching-acme-vs-spiffe": {
-      "name": "graph-mode-branching-acme-vs-spiffe",
       "module": "agent/graph.py",
       "description": "build_graph() branches on settings.CERT_ISSUANCE_MODE to wire exactly one of two disjoint node sets/edge chains (_build_acme_graph or _build_spiffe_graph) into a shared StateGraph, sharing scanner/planner/pick_next_domain/storage_manager/summary_reporter but diverging on issuance mechanics.",
       "invariants": [
         "Never both ACME and SPIFFE node sets are wired into the same compiled graph",
-        "Both modes share the same entry (certificate_scanner) and terminal (summary_reporter → END) nodes"
+        "Both modes share the same entry (certificate_scanner) and terminal (summary_reporter \u2192 END) nodes"
       ],
       "contracts": [
         "initial_state() produces a state dict compatible with whichever graph is built, regardless of mode"
@@ -264,13 +324,20 @@
         "agent/graph.py:80-158",
         "agent/graph.py:161-201"
       ],
-      "last_validated": "2026-07-03T22:48:21.991184+00:00",
-      "created_at": "2026-07-03T22:48:21.991184+00:00"
+      "related": [
+        "cert-issuance-mode-strict-exclusivity",
+        "spiffe-mode-terminal-failure-semantics",
+        "revocation-graph-best-effort-looping",
+        "node-registry-class-instantiation-factory",
+        "agent-state-typed-schema"
+      ],
+      "last_validated": "2026-07-14T23:00:44.681391+00:00",
+      "created_at": "2026-07-03T22:48:21.991184+00:00",
+      "name": "graph-mode-branching-acme-vs-spiffe"
     },
     "spiffe-mode-terminal-failure-semantics": {
-      "name": "spiffe-mode-terminal-failure-semantics",
       "module": "agent/graph.py",
-      "description": "SPIFFE mode graph has no error_handler/retry_scheduler nodes — spiffe_attestor failures are terminal per-domain, handled the same way storage_manager already handles its own failures (recorded and loop continues via domain_loop_router).",
+      "description": "SPIFFE mode graph has no error_handler/retry_scheduler nodes \u2014 spiffe_attestor failures are terminal per-domain, handled the same way storage_manager already handles its own failures (recorded and loop continues via domain_loop_router).",
       "invariants": [
         "SPIFFE mode never retries a failed attestation within the same domain iteration",
         "Failures in spiffe_attestor must still allow domain_loop_router to proceed to the next domain"
@@ -283,11 +350,15 @@
         "agent/graph.py:164-171",
         "agent/graph.py:189-201"
       ],
-      "last_validated": "2026-07-03T22:48:21.991755+00:00",
-      "created_at": "2026-07-03T22:48:21.991755+00:00"
+      "related": [
+        "graph-mode-branching-acme-vs-spiffe",
+        "cert-issuance-mode-strict-exclusivity"
+      ],
+      "last_validated": "2026-07-14T23:00:44.681391+00:00",
+      "created_at": "2026-07-03T22:48:21.991755+00:00",
+      "name": "spiffe-mode-terminal-failure-semantics"
     },
     "acme-error-routing-triad": {
-      "name": "acme-error-routing-triad",
       "module": "agent/nodes/router.py",
       "description": "error_action_router reads the plain state field error_action (set directly by error_handler, not JSON-parsed) to route to retry/skip_domain/abort, defaulting to skip_domain on missing/unrecognized values, and further gates 'retry' on retry_count < max_retries.",
       "invariants": [
@@ -301,11 +372,16 @@
       "evidence": [
         "agent/nodes/router.py:104-133"
       ],
-      "last_validated": "2026-07-03T22:48:21.992190+00:00",
-      "created_at": "2026-07-03T22:48:21.992190+00:00"
+      "related": [
+        "pick-next-domain-state-reset",
+        "error-handler-fatal-vs-retryable-classification",
+        "retry-scheduler-backoff-gate"
+      ],
+      "last_validated": "2026-07-14T23:00:44.681391+00:00",
+      "created_at": "2026-07-03T22:48:21.992190+00:00",
+      "name": "acme-error-routing-triad"
     },
     "pick-next-domain-state-reset": {
-      "name": "pick-next-domain-state-reset",
       "module": "agent/nodes/router.py",
       "description": "PickNextDomainNode pops the next domain from pending_renewals and resets per-domain transient state (current_order, current_nonce, retry_count, retry_delay_seconds) so each domain's ACME flow starts clean.",
       "invariants": [
@@ -318,11 +394,16 @@
       "evidence": [
         "agent/nodes/router.py:16-33"
       ],
-      "last_validated": "2026-07-03T22:48:21.992585+00:00",
-      "created_at": "2026-07-03T22:48:21.992585+00:00"
+      "related": [
+        "acme-error-routing-triad",
+        "error-handler-fatal-vs-retryable-classification",
+        "retry-scheduler-backoff-gate"
+      ],
+      "last_validated": "2026-07-14T23:00:44.681391+00:00",
+      "created_at": "2026-07-03T22:48:21.992585+00:00",
+      "name": "pick-next-domain-state-reset"
     },
     "ca-mismatch-advisory-detection": {
-      "name": "ca-mismatch-advisory-detection",
       "module": "agent/nodes/scanner.py",
       "description": "CertificateScannerNode only performs CA detection on existing certs when CA_PROVIDER is 'custom'; for named providers, config is treated as authoritative and detection is skipped, though a mismatch warning still normalizes letsencrypt/letsencrypt_staging as equivalent.",
       "invariants": [
@@ -334,14 +415,18 @@
       ],
       "confidence": 0.85,
       "evidence": [
-        "agent/nodes/scanner.py:64-68",
-        "agent/nodes/scanner.py:141-159"
+        "agent/nodes/scanner.py:60-68",
+        "agent/nodes/scanner.py:116-137"
       ],
-      "last_validated": "2026-07-03T22:48:21.993030+00:00",
-      "created_at": "2026-07-03T22:48:21.993030+00:00"
+      "related": [
+        "cert-issuance-mode-strict-exclusivity",
+        "pem-chain-leaf-vs-intermediate-split"
+      ],
+      "last_validated": "2026-07-14T23:00:44.681391+00:00",
+      "created_at": "2026-07-03T22:48:21.993030+00:00",
+      "name": "ca-mismatch-advisory-detection"
     },
     "planner-llm-output-domain-validation": {
-      "name": "planner-llm-output-domain-validation",
       "module": "agent/nodes/planner.py",
       "description": "_parse_and_validate strips markdown fences, drops non-string entries, filters out hallucinated domains not in managed_domains, and backfills any unclassified managed domain into 'routine', guaranteeing every managed domain appears in exactly one bucket.",
       "invariants": [
@@ -356,11 +441,15 @@
         "agent/nodes/planner.py:210-259",
         "agent/nodes/planner.py:194-207"
       ],
-      "last_validated": "2026-07-03T22:48:21.993450+00:00",
-      "created_at": "2026-07-03T22:48:21.993450+00:00"
+      "related": [
+        "planner-llm-vs-deterministic-dispatch",
+        "claude-cli-llm-provider-no-key-required"
+      ],
+      "last_validated": "2026-07-14T23:00:44.681391+00:00",
+      "created_at": "2026-07-03T22:48:21.993450+00:00",
+      "name": "planner-llm-output-domain-validation"
     },
     "planner-llm-vs-deterministic-dispatch": {
-      "name": "planner-llm-vs-deterministic-dispatch",
       "module": "agent/nodes/planner.py",
       "description": "RenewalPlannerNode.run dispatches to LLM-based or deterministic planning based on settings.LLM_DISABLED, with the deterministic path ordering no-cert domains first then expiry-soon domains sorted ascending by days.",
       "invariants": [
@@ -374,11 +463,15 @@
         "agent/nodes/planner.py:32-37",
         "agent/nodes/planner.py:190-233"
       ],
-      "last_validated": "2026-07-03T22:48:21.993834+00:00",
-      "created_at": "2026-07-03T22:48:21.993834+00:00"
+      "related": [
+        "planner-llm-output-domain-validation",
+        "claude-cli-llm-provider-no-key-required"
+      ],
+      "last_validated": "2026-07-14T23:00:44.681391+00:00",
+      "created_at": "2026-07-03T22:48:21.993834+00:00",
+      "name": "planner-llm-vs-deterministic-dispatch"
     },
     "account-key-not-in-state": {
-      "name": "account-key-not-in-state",
       "module": "agent/nodes/account.py",
       "description": "The ACME account private key is never stored in AgentState (to avoid leaking into LangSmith traces); only the account_key_path is kept in state, and the key is loaded from disk on demand by nodes that need it.",
       "invariants": [
@@ -392,11 +485,15 @@
         "agent/state.py:14-16",
         "agent/nodes/account.py:16-19"
       ],
-      "last_validated": "2026-07-03T22:48:21.994276+00:00",
-      "created_at": "2026-07-03T22:48:21.994276+00:00"
+      "related": [
+        "domain-privkey-never-in-state",
+        "agent-state-typed-schema"
+      ],
+      "last_validated": "2026-07-14T23:00:44.681391+00:00",
+      "created_at": "2026-07-03T22:48:21.994276+00:00",
+      "name": "account-key-not-in-state"
     },
     "domain-privkey-never-in-state": {
-      "name": "domain-privkey-never-in-state",
       "module": "agent/nodes/csr.py",
       "description": "CsrGeneratorNode writes the generated domain private key directly to disk (mode 0o600) and only stores the CSR DER (hex-encoded) in state; the private key itself never passes through AgentState/checkpoints.",
       "invariants": [
@@ -411,11 +508,15 @@
         "agent/nodes/csr.py:56-60",
         "agent/nodes/csr.py:65-69"
       ],
-      "last_validated": "2026-07-03T22:48:21.994659+00:00",
-      "created_at": "2026-07-03T22:48:21.994659+00:00"
+      "related": [
+        "account-key-not-in-state",
+        "agent-state-typed-schema"
+      ],
+      "last_validated": "2026-07-14T23:00:44.681391+00:00",
+      "created_at": "2026-07-03T22:48:21.994659+00:00",
+      "name": "domain-privkey-never-in-state"
     },
     "challenge-type-mode-consistency": {
-      "name": "challenge-type-mode-consistency",
       "module": "agent/nodes/order.py",
       "description": "order_initializer selects http-01 or dns-01 challenge type based on settings.HTTP_CHALLENGE_MODE, and only populates dns_txt_values when in dns mode, keeping AcmeOrder's parallel lists consistent across auth_urls/challenge_urls/auth_domains/dns_txt_values.",
       "invariants": [
@@ -430,13 +531,17 @@
         "agent/nodes/order.py:70-95",
         "agent/state.py:41-51"
       ],
-      "last_validated": "2026-07-03T22:48:21.995046+00:00",
-      "created_at": "2026-07-03T22:48:21.995046+00:00"
+      "related": [
+        "challenge-lifecycle-shared-module-state",
+        "authorization-already-valid-skip"
+      ],
+      "last_validated": "2026-07-14T23:00:44.681391+00:00",
+      "created_at": "2026-07-03T22:48:21.995046+00:00",
+      "name": "challenge-type-mode-consistency"
     },
     "challenge-lifecycle-shared-module-state": {
-      "name": "challenge-lifecycle-shared-module-state",
       "module": "agent/nodes/challenge.py",
-      "description": "ChallengeSetupNode and ChallengeVerifierNode share module-level singletons (_standalone_server, _dns_provider) across the setup→verify→cleanup lifecycle for a single domain's challenge, since standalone HTTP server and DNS provider connections must persist between graph node invocations.",
+      "description": "ChallengeSetupNode and ChallengeVerifierNode share module-level singletons (_standalone_server, _dns_provider) across the setup\u2192verify\u2192cleanup lifecycle for a single domain's challenge, since standalone HTTP server and DNS provider connections must persist between graph node invocations.",
       "invariants": [
         "_standalone_server/_dns_provider are only non-None while a challenge is actively being served for the current domain",
         "_cleanup_challenge always tears down the mode-appropriate resource (server stop, webroot file removal, or DNS TXT deletion) before returning control"
@@ -449,13 +554,17 @@
         "agent/nodes/challenge.py:29-33",
         "agent/nodes/challenge.py:216-231"
       ],
-      "last_validated": "2026-07-03T22:48:21.995444+00:00",
-      "created_at": "2026-07-03T22:48:21.995444+00:00"
+      "related": [
+        "challenge-type-mode-consistency",
+        "authorization-already-valid-skip"
+      ],
+      "last_validated": "2026-07-14T23:00:44.681391+00:00",
+      "created_at": "2026-07-03T22:48:21.995444+00:00",
+      "name": "challenge-lifecycle-shared-module-state"
     },
     "authorization-already-valid-skip": {
-      "name": "authorization-already-valid-skip",
       "module": "agent/nodes/challenge.py",
-      "description": "ChallengeVerifierNode checks each authorization's current status before responding to its challenge; if already 'valid' (server-side reuse across orders per RFC 8555 §7.5), it skips responding to avoid a 'malformed' error from re-responding to a valid challenge.",
+      "description": "ChallengeVerifierNode checks each authorization's current status before responding to its challenge; if already 'valid' (server-side reuse across orders per RFC 8555 \u00a77.5), it skips responding to avoid a 'malformed' error from re-responding to a valid challenge.",
       "invariants": [
         "Never POST a challenge response for an authorization already in 'valid' status"
       ],
@@ -466,11 +575,15 @@
       "evidence": [
         "agent/nodes/challenge.py:180-185"
       ],
-      "last_validated": "2026-07-03T22:48:21.995886+00:00",
-      "created_at": "2026-07-03T22:48:21.995886+00:00"
+      "related": [
+        "challenge-type-mode-consistency",
+        "challenge-lifecycle-shared-module-state"
+      ],
+      "last_validated": "2026-07-14T23:00:44.681391+00:00",
+      "created_at": "2026-07-03T22:48:21.995886+00:00",
+      "name": "authorization-already-valid-skip"
     },
     "pem-chain-leaf-vs-intermediate-split": {
-      "name": "pem-chain-leaf-vs-intermediate-split",
       "module": "agent/nodes/storage.py",
       "description": "_split_pem_chain splits DigiCert's full PEM chain response on '-----END CERTIFICATE-----' boundaries, treating the first block as the leaf cert.pem and the rest as chain.pem.",
       "invariants": [
@@ -481,13 +594,17 @@
       ],
       "confidence": 0.8,
       "evidence": [
-        "agent/nodes/storage.py:122-140"
+        "agent/nodes/storage.py:97-118"
       ],
-      "last_validated": "2026-07-03T22:48:21.996322+00:00",
-      "created_at": "2026-07-03T22:48:21.996322+00:00"
+      "related": [
+        "ca-mismatch-advisory-detection",
+        "cert-issuance-mode-strict-exclusivity"
+      ],
+      "last_validated": "2026-07-14T23:00:44.681391+00:00",
+      "created_at": "2026-07-03T22:48:21.996322+00:00",
+      "name": "pem-chain-leaf-vs-intermediate-split"
     },
     "error-handler-fatal-vs-retryable-classification": {
-      "name": "error-handler-fatal-vs-retryable-classification",
       "module": "agent/nodes/error_handler.py",
       "description": "ErrorHandlerNode classifies errors as fatal (unauthorized, accountdoesnotexist, badkey, externalaccountrequired substrings) forcing abort regardless of retry_count, otherwise applies exponential backoff (capped 300s) until max_retries then skips.",
       "invariants": [
@@ -504,11 +621,16 @@
         "agent/nodes/error_handler.py:96-113",
         "agent/nodes/error_handler.py:126-135"
       ],
-      "last_validated": "2026-07-03T22:48:21.996818+00:00",
-      "created_at": "2026-07-03T22:48:21.996818+00:00"
+      "related": [
+        "acme-error-routing-triad",
+        "pick-next-domain-state-reset",
+        "retry-scheduler-backoff-gate"
+      ],
+      "last_validated": "2026-07-14T23:00:44.681391+00:00",
+      "created_at": "2026-07-03T22:48:21.996818+00:00",
+      "name": "error-handler-fatal-vs-retryable-classification"
     },
     "retry-scheduler-backoff-gate": {
-      "name": "retry-scheduler-backoff-gate",
       "module": "agent/nodes/retry_scheduler.py",
       "description": "RetrySchedulerNode synchronously sleeps until state['retry_not_before'] elapses before clearing it, decoupling error-decision (error_handler) from timing enforcement (retry_scheduler) in the graph.",
       "invariants": [
@@ -521,13 +643,18 @@
       "evidence": [
         "agent/nodes/retry_scheduler.py:29-49"
       ],
-      "last_validated": "2026-07-03T22:48:21.997278+00:00",
-      "created_at": "2026-07-03T22:48:21.997278+00:00"
+      "related": [
+        "acme-error-routing-triad",
+        "error-handler-fatal-vs-retryable-classification",
+        "pick-next-domain-state-reset"
+      ],
+      "last_validated": "2026-07-14T23:00:44.681391+00:00",
+      "created_at": "2026-07-03T22:48:21.997278+00:00",
+      "name": "retry-scheduler-backoff-gate"
     },
     "revocation-graph-best-effort-looping": {
-      "name": "revocation-graph-best-effort-looping",
       "module": "agent/revocation_graph.py",
-      "description": "The revocation subgraph has no error_handler/retry — cert_revoker failures are logged into failed_revocations and revocation_loop_router unconditionally continues to the next domain, making revocation best-effort across a batch.",
+      "description": "The revocation subgraph has no error_handler/retry \u2014 cert_revoker failures are logged into failed_revocations and revocation_loop_router unconditionally continues to the next domain, making revocation best-effort across a batch.",
       "invariants": [
         "A single domain's revocation failure never halts processing of remaining revocation_targets"
       ],
@@ -539,11 +666,15 @@
         "agent/revocation_graph.py:16-19",
         "agent/nodes/revocation_router.py:56-65"
       ],
-      "last_validated": "2026-07-03T22:48:21.997799+00:00",
-      "created_at": "2026-07-03T22:48:21.997799+00:00"
+      "related": [
+        "graph-mode-branching-acme-vs-spiffe",
+        "node-registry-class-instantiation-factory"
+      ],
+      "last_validated": "2026-07-14T23:00:44.681391+00:00",
+      "created_at": "2026-07-03T22:48:21.997799+00:00",
+      "name": "revocation-graph-best-effort-looping"
     },
     "claude-cli-llm-provider-no-key-required": {
-      "name": "claude-cli-llm-provider-no-key-required",
       "module": "llm/factory.py",
       "description": "make_llm() special-cases LLM_PROVIDER='claude_cli' to shell out to the `claude` binary (--safe-mode --tools none) reusing the caller's existing OAuth login, bypassing the langchain/API-key path entirely and requiring no ANTHROPIC_API_KEY or optional extras.",
       "invariants": [
@@ -559,11 +690,15 @@
         "llm/factory.py:76-100",
         "llm/factory.py:143-144"
       ],
-      "last_validated": "2026-07-03T22:48:21.998323+00:00",
-      "created_at": "2026-07-03T22:48:21.998323+00:00"
+      "related": [
+        "planner-llm-output-domain-validation",
+        "planner-llm-vs-deterministic-dispatch"
+      ],
+      "last_validated": "2026-07-14T23:00:44.681391+00:00",
+      "created_at": "2026-07-03T22:48:21.998323+00:00",
+      "name": "claude-cli-llm-provider-no-key-required"
     },
     "node-registry-class-instantiation-factory": {
-      "name": "node-registry-class-instantiation-factory",
       "module": "agent/nodes/registry.py",
       "description": "get_node(name) looks up a callable class in NODE_REGISTRY and instantiates it, enforcing that registry entries are classes (not pre-built instances) via an explicit TypeError check.",
       "invariants": [
@@ -576,11 +711,15 @@
       "evidence": [
         "agent/nodes/registry.py:59-72"
       ],
-      "last_validated": "2026-07-03T22:48:21.998858+00:00",
-      "created_at": "2026-07-03T22:48:21.998858+00:00"
+      "related": [
+        "graph-mode-branching-acme-vs-spiffe",
+        "agent-state-typed-schema"
+      ],
+      "last_validated": "2026-07-14T23:00:44.681391+00:00",
+      "created_at": "2026-07-03T22:48:21.998858+00:00",
+      "name": "node-registry-class-instantiation-factory"
     },
     "agent-state-typed-schema": {
-      "name": "agent-state-typed-schema",
       "module": "agent/state.py",
       "description": "AgentState is a single shared TypedDict spanning both the renewal graph and revocation graph, with revocation-specific fields (revocation_targets, current_revocation_domain, etc.) coexisting alongside renewal fields even though a given graph only uses one subset.",
       "invariants": [
@@ -595,8 +734,14 @@
         "agent/state.py:60-104",
         "agent/state.py:97-104"
       ],
-      "last_validated": "2026-07-03T22:48:21.999389+00:00",
-      "created_at": "2026-07-03T22:48:21.999389+00:00"
+      "related": [
+        "account-key-not-in-state",
+        "domain-privkey-never-in-state",
+        "node-registry-class-instantiation-factory"
+      ],
+      "last_validated": "2026-07-14T23:00:44.681391+00:00",
+      "created_at": "2026-07-03T22:48:21.999389+00:00",
+      "name": "agent-state-typed-schema"
     }
   }
 }
