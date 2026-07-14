@@ -6,30 +6,7 @@ The lifecycle logic (monitor → plan → issue → renew → revoke) is protoco
 
 **Deterministic mode** (`LLM_DISABLED=true`): No LLM API calls; fully auditable renewal logic for air-gapped installations and cost optimization.
 
-Designed for the coming **47-day TLS mandate (2029)**, where automated renewal is not optional.
-
-The lifecycle logic (monitor → plan → issue → renew → revoke) is protocol-agnostic — the ACME RFC 8555 flow is just the current backend. This can be extended to issue **SPIFFE SVIDs** (workload identity certs, e.g. via a SPIFFE/SPIRE-compatible CA) for agentic and service-mesh environments, reusing the same renewal-planning and error-handling graph.
-
 ---
-
-## Quality & Testing
-
-[![Coverage](https://img.shields.io/badge/coverage-92%25-brightgreen?style=for-the-badge&logo=pytest&logoColor=white)](doc/CI_TEST_COVERAGE.md)
-[![Unit Tests](https://img.shields.io/badge/unit_tests-586_passing-brightgreen?style=for-the-badge&logo=pytest&logoColor=white)](doc/CI_TEST_COVERAGE.md)
-[![Integration Tests](https://img.shields.io/badge/integration_tests-9_pebble_%2B_3_spire-blue?style=for-the-badge&logo=docker&logoColor=white)](doc/CI_TEST_COVERAGE.md)
-[![CI Runtime](https://img.shields.io/badge/CI_runtime-~9s-blue?style=for-the-badge&logo=githubactions&logoColor=white)](doc/CI_TEST_COVERAGE.md)
-
-| Metric | Value |
-|---|---|
-| Line coverage | **92%** — 6,338 / 6,884 statements *(not recomputed this pass — see [CI_TEST_COVERAGE.md](doc/CI_TEST_COVERAGE.md))* |
-| Unit tests (CI) | 586 · parallel via `xdist` · ~9 s |
-| Integration tests | 9 against Pebble ACME mock server + 3 against SPIRE |
-| Total | 598 tests |
-| Modules at 100% | `router` · `planner` · `registry` · `state` · `graph` · `crypto` · `prompts` · `revocation_graph` |
-
-Coverage lifts from targeted tests: `router` 60%→**100%** · `storage` 23%→**96%** · `error_handler` 26%→**98%** · `finalizer` 22%→**88%**
-
-See [CI_TEST_COVERAGE.md](doc/CI_TEST_COVERAGE.md) for the full per-file breakdown.
 
 ## Documentation
 
@@ -69,6 +46,7 @@ LLM_DISABLED=true python main.py --once
 python mcp_server.py
 ```
 
+Non-technical users running this repo in Claude Code can instead say "enroll a certificate for my domain" to invoke the guided `enroll-cert` skill (`.claude/skills/enroll-cert/`), which collects the needed inputs in plain English and diagnoses challenge failures (DNS/HTTP checks) automatically.
 
 ## License
 
