@@ -82,7 +82,23 @@ fatal (abort) or retryable (backoff/skip) based on substrings like
 `unauthorized`, `accountdoesnotexist`, `badkey`, `externalaccountrequired` in the
 ACME error. That classification alone isn't enough for a non-technical user —
 run active diagnosis based on which challenge type was used, matched against the
-failed domain(s) from the run's JSONL log / final state:
+failed domain(s) from the run's JSONL log / final state.
+
+This logic is implemented in `diagnostics.py` (also used by the TUI's failure
+panel — see `tui/` — so both stay in sync). Prefer calling it directly over
+running the dig/curl commands by hand:
+
+```bash
+python -c "
+from diagnostics import diagnose
+r = diagnose(error_text='<the ACME error text from the run>', domain='<domain>',
+              challenge_mode='<standalone|webroot|dns>', token='<token, HTTP-01 only>')
+print(r.summary)
+"
+```
+
+The sections below document what that function does, for reference / manual
+diagnosis if `diagnostics.py` needs to be bypassed for some reason:
 
 ### HTTP-01 (`standalone` or `webroot` mode)
 
