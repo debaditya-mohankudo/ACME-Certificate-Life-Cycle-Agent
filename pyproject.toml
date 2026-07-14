@@ -31,6 +31,9 @@ dns-all        = ["cloudflare>=3.0", "boto3>=1.34", "google-cloud-dns>=0.34"]
 # SPIFFE/SPIRE issuance extra — required only when CERT_ISSUANCE_MODE=spiffe
 spiffe = ["spiffe>=0.3"]
 
+# TUI — required only for `python main.py --tui`
+tui = ["textual>=0.60"]
+
 [dependency-groups]
 dev = [
     "acme-certificate-lifecycle-agent[llm-all,dns-all,spiffe]",
