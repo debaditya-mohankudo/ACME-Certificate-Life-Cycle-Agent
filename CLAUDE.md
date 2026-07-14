@@ -2,6 +2,10 @@
 
 ---
 
+> **Memory:** persistent cross-session memory (feedback, project context, references) is unified in `~/.claude/MEMORY.sqlite` — use the `mcp__claude-hooks__memory__*` tools to read/write it. Do not create scattered per-project `memory/*.md` files.
+
+---
+
 <!--
   DOCUMENT LAYERS
   ───────────────────────────────────────────────────────
