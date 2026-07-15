@@ -2,13 +2,22 @@
 managed domains/SVIDs, LLM mode). No network calls, no cert-store access —
 matches the safety of main.py's existing read-only query commands.
 
-Every mode-specific field is read via getattr(settings, field, default), not
-direct attribute access: CERT_ISSUANCE_MODE dispatches config.settings to
+Every mode-specific field is read via getattr(config.settings, field, default),
+not direct attribute access: CERT_ISSUANCE_MODE dispatches config.settings to
 exactly one of AcmeConfig/SpiffeConfig at construction time, and the inactive
 mode's fields simply don't exist on the object (accessing them raises
 AttributeError — see config.py's module docstring and the repo's own
 getattr-with-default convention already used in agent/nodes/scanner.py and
 agent/nodes/storage.py for the same reason).
+
+Imports the `config` module and reads `config.settings.*` live, rather than
+`from config import settings` — the latter binds a name at import time, and
+since ConfigScreen *reassigns* config.settings (config.settings = ...) rather
+than mutating it in place, any module that did `from config import settings`
+would keep pointing at the stale pre-reload object forever, not just until
+next re-import. Found as a real bug: after saving ConfigScreen, HomeScreen's
+summary didn't update even after screen-resume refresh, because it was
+importing settings, not config.
 """
 from __future__ import annotations
 
@@ -17,34 +26,34 @@ from textual.containers import Vertical
 from textual.screen import Screen
 from textual.widgets import Footer, Header, Static
 
-from config import settings
+import config
 from tui.tui_widgets import bordered, log_ui
 
 
 def _format_config_summary() -> str:
-    mode = getattr(settings, "CERT_ISSUANCE_MODE", "acme")
+    mode = getattr(config.settings, "CERT_ISSUANCE_MODE", "acme")
     lines = [f"Issuance mode: [b]{mode}[/b]"]
 
     if mode == "spiffe":
-        trust_domain = getattr(settings, "SPIFFE_TRUST_DOMAIN", "") or "(not set)"
-        svids = getattr(settings, "MANAGED_SPIFFE_IDS", []) or []
+        trust_domain = getattr(config.settings, "SPIFFE_TRUST_DOMAIN", "") or "(not set)"
+        svids = getattr(config.settings, "MANAGED_SPIFFE_IDS", []) or []
         lines.append(f"SPIFFE trust domain: {trust_domain}")
         lines.append(f"Managed SPIFFE IDs ({len(svids)}):")
         lines.extend(f"  - {svid}" for svid in svids) if svids else lines.append("  (none configured)")
     else:
-        ca_provider = getattr(settings, "CA_PROVIDER", "?")
-        directory_url = getattr(settings, "ACME_DIRECTORY_URL", "") or "(resolved from CA_PROVIDER preset)"
-        domains = getattr(settings, "MANAGED_DOMAINS", []) or []
-        challenge_mode = getattr(settings, "HTTP_CHALLENGE_MODE", "standalone")
+        ca_provider = getattr(config.settings, "CA_PROVIDER", "?")
+        directory_url = getattr(config.settings, "ACME_DIRECTORY_URL", "") or "(resolved from CA_PROVIDER preset)"
+        domains = getattr(config.settings, "MANAGED_DOMAINS", []) or []
+        challenge_mode = getattr(config.settings, "HTTP_CHALLENGE_MODE", "standalone")
         lines.append(f"CA provider: {ca_provider}")
         lines.append(f"ACME directory URL: {directory_url}")
         lines.append(f"Challenge mode: {challenge_mode}")
         lines.append(f"Managed domains ({len(domains)}):")
         lines.extend(f"  - {d}" for d in domains) if domains else lines.append("  (none configured)")
 
-    llm_disabled = getattr(settings, "LLM_DISABLED", True)
+    llm_disabled = getattr(config.settings, "LLM_DISABLED", True)
     llm_line = "Deterministic mode (no LLM calls)" if llm_disabled else (
-        f"LLM planner enabled — provider: {getattr(settings, 'LLM_PROVIDER', '?')}"
+        f"LLM planner enabled — provider: {getattr(config.settings, 'LLM_PROVIDER', '?')}"
     )
     lines.append("")
     lines.append(llm_line)
@@ -55,7 +64,11 @@ def _format_config_summary() -> str:
 class HomeScreen(Screen):
     """What this app does, plus a read-only render of the active config."""
 
-    BINDINGS = [("r", "run_screen", "Run"), ("d", "domain_status_screen", "Domain Status")]
+    BINDINGS = [
+        ("r", "run_screen", "Run"),
+        ("d", "domain_status_screen", "Domain Status"),
+        ("c", "config_screen", "Edit Config"),
+    ]
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
@@ -66,7 +79,7 @@ class HomeScreen(Screen):
                 "certificate renewal via ACME (or SPIFFE SVID issuance). This "
                 "TUI drives the same CLI (main.py) a terminal user would — it "
                 "never bypasses the graph or the CLI's own safety checks.\n\n"
-                "[b]r[/b] Run a renewal   [b]d[/b] Domain status",
+                "[b]r[/b] Run a renewal   [b]d[/b] Domain status   [b]c[/b] Edit config",
                 id="intro",
             ),
             bordered(Static(_format_config_summary(), id="config-details"), "Active Configuration").add_class(
@@ -81,6 +94,16 @@ class HomeScreen(Screen):
 
     def on_screen_resume(self) -> None:
         log_ui("screen_resumed", screen="HomeScreen")
+        self.refresh_summary()
+
+    def refresh_summary(self) -> None:
+        """Re-render the config summary against the current config.settings.
+        Called explicitly from AcmeTuiApp.pop_screen (not just relying on
+        on_screen_resume above) — see app.py's comment: on_screen_resume
+        doesn't reliably fire on pop_screen in this Textual version, which
+        would otherwise leave this panel showing stale values after
+        ConfigScreen edits and pops back."""
+        self.query_one("#config-details", Static).update(_format_config_summary())
 
     def action_run_screen(self) -> None:
         log_ui("key_pressed", screen="HomeScreen", key="r")
@@ -93,3 +116,9 @@ class HomeScreen(Screen):
         from tui.screens.domain_status import DomainStatusScreen
 
         self.app.push_screen(DomainStatusScreen())
+
+    def action_config_screen(self) -> None:
+        log_ui("key_pressed", screen="HomeScreen", key="c")
+        from tui.screens.config_edit import ConfigScreen
+
+        self.app.push_screen(ConfigScreen())

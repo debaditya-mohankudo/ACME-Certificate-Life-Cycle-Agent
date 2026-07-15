@@ -24,7 +24,7 @@ from textual.screen import Screen
 from textual.widgets import Button, Footer, Header, Input, Select, Static
 from textual.worker import get_current_worker
 
-from config import settings
+import config
 from diagnostics import diagnose
 from tui.subprocess_stream import stream_subprocess
 from tui.tui_widgets import EventFeed, bordered, log_ui
@@ -62,7 +62,7 @@ class RunScreen(Screen):
         yield Vertical(
             bordered(
                 Input(
-                    value=",".join(getattr(settings, "MANAGED_DOMAINS", []) or []),
+                    value=",".join(getattr(config.settings, "MANAGED_DOMAINS", []) or []),
                     placeholder="domain.com,other.com",
                     id="domain-input",
                 ),
@@ -125,7 +125,7 @@ class RunScreen(Screen):
         """
         worker = get_current_worker()
         argv = [sys.executable, "main.py", "--once", "--domains", *domains, "--ca-provider", ca_provider]
-        challenge_mode = getattr(settings, "HTTP_CHALLENGE_MODE", "standalone")
+        challenge_mode = getattr(config.settings, "HTTP_CHALLENGE_MODE", "standalone")
         exit_code = 1
         last_error: str | None = None
         try:

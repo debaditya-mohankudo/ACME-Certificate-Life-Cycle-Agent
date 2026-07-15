@@ -41,7 +41,7 @@ class _FakeAcmeSettings:
 
 
 def test_format_config_summary_acme_mode(monkeypatch):
-    monkeypatch.setattr(home_module, "settings", _FakeAcmeSettings())
+    monkeypatch.setattr(home_module.config, "settings", _FakeAcmeSettings())
     summary = home_module._format_config_summary()
     assert "Issuance mode: [b]acme[/b]" in summary
     assert "CA provider: letsencrypt" in summary

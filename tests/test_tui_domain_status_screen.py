@@ -26,7 +26,7 @@ async def test_domain_status_screen_populates_table_for_missing_certs(monkeypatc
         MANAGED_DOMAINS=["a.example.com", "b.example.com"],
         CERT_STORE_PATH=str(tmp_path),  # empty dir -> both domains "missing"
     )
-    monkeypatch.setattr(ds_module, "settings", fake_settings)
+    monkeypatch.setattr(ds_module.config, "settings", fake_settings)
 
     app = _DomainStatusApp()
     async with app.run_test() as pilot:
@@ -38,7 +38,7 @@ async def test_domain_status_screen_populates_table_for_missing_certs(monkeypatc
 @pytest.mark.asyncio
 async def test_domain_status_screen_empty_managed_domains_no_crash(monkeypatch, tmp_path):
     fake_settings = SimpleNamespace(MANAGED_DOMAINS=[], CERT_STORE_PATH=str(tmp_path))
-    monkeypatch.setattr(ds_module, "settings", fake_settings)
+    monkeypatch.setattr(ds_module.config, "settings", fake_settings)
 
     app = _DomainStatusApp()
     async with app.run_test() as pilot:
@@ -50,7 +50,7 @@ async def test_domain_status_screen_empty_managed_domains_no_crash(monkeypatch, 
 @pytest.mark.asyncio
 async def test_domain_status_screen_refresh_action_no_crash(monkeypatch, tmp_path):
     fake_settings = SimpleNamespace(MANAGED_DOMAINS=["a.example.com"], CERT_STORE_PATH=str(tmp_path))
-    monkeypatch.setattr(ds_module, "settings", fake_settings)
+    monkeypatch.setattr(ds_module.config, "settings", fake_settings)
 
     app = _DomainStatusApp()
     async with app.run_test() as pilot:

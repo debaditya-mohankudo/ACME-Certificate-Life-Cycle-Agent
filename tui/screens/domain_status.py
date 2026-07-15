@@ -16,7 +16,7 @@ from textual.containers import Vertical
 from textual.screen import Screen
 from textual.widgets import Button, DataTable, Footer, Header
 
-from config import settings
+import config
 from tui.tui_widgets import bordered, log_ui
 
 _STATUS_COLOR = {
@@ -71,11 +71,11 @@ class DomainStatusScreen(Screen):
         table = self.query_one("#domain-table", DataTable)
         table.clear()
 
-        domains = getattr(settings, "MANAGED_DOMAINS", []) or []
+        domains = getattr(config.settings, "MANAGED_DOMAINS", []) or []
         if not domains:
             return
 
-        for row in get_domain_statuses(domains, settings):
+        for row in get_domain_statuses(domains, config.settings):
             status = row.get("status", "unknown")
             color = _STATUS_COLOR.get(status, "")
             status_text = Text(status, style=color) if color else Text(status)

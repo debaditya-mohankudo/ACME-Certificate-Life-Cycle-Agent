@@ -26,7 +26,16 @@ def test_make_settings_defaults_to_acme_config():
     assert settings.CERT_ISSUANCE_MODE == "acme"
 
 
-def test_make_settings_constructs_acme_config(monkeypatch):
+def test_make_settings_constructs_acme_config(monkeypatch, tmp_path):
+    # This asserts a pydantic field default (CA_PROVIDER=="digicert" when
+    # nothing else sets it) — must not depend on whatever the developer's
+    # local .env happens to contain. chdir to an empty tmp_path so
+    # env_file=".env" resolves to a directory with no .env file at all,
+    # rather than patching AcmeConfig.model_config directly (tried first;
+    # broke test_graph_cert_issuance_mode.py's importlib.reload(config)
+    # teardown, which rebuilds AcmeConfig as a brand-new class object that a
+    # class-level monkeypatch doesn't follow).
+    monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("CERT_ISSUANCE_MODE", "acme")
     from config import AcmeConfig, make_settings
 
