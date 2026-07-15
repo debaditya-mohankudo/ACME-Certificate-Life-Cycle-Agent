@@ -33,7 +33,7 @@ from tui.tui_widgets import bordered, breadcrumb_bar, log_ui, stat_tile, status_
 
 def _format_config_summary() -> str:
     mode = getattr(config.settings, "CERT_ISSUANCE_MODE", "acme")
-    lines = [f"Issuance mode: [b]{mode}[/b]"]
+    lines = [] #[f"Issuance mode: [b]{mode}[/b]"]
 
     if mode == "spiffe":
         trust_domain = getattr(config.settings, "SPIFFE_TRUST_DOMAIN", "") or "(not set)"
@@ -46,18 +46,18 @@ def _format_config_summary() -> str:
         directory_url = getattr(config.settings, "ACME_DIRECTORY_URL", "") or "(resolved from CA_PROVIDER preset)"
         domains = getattr(config.settings, "MANAGED_DOMAINS", []) or []
         challenge_mode = getattr(config.settings, "HTTP_CHALLENGE_MODE", "standalone")
-        lines.append(f"CA provider: {ca_provider}")
+        #lines.append(f"CA provider: {ca_provider}")
         lines.append(f"ACME directory URL: {directory_url}")
         lines.append(f"Challenge mode: {challenge_mode}")
-        lines.append(f"Managed domains ({len(domains)}):")
-        lines.extend(f"  - {d}" for d in domains) if domains else lines.append("  (none configured)")
+        #lines.append(f"Managed domains ({len(domains)}):")
+        #lines.extend(f"  - {d}" for d in domains) if domains else lines.append("  (none configured)")
 
     llm_disabled = getattr(config.settings, "LLM_DISABLED", True)
     llm_line = "Deterministic mode (no LLM calls)" if llm_disabled else (
         f"LLM planner enabled — provider: {getattr(config.settings, 'LLM_PROVIDER', '?')}"
     )
     lines.append("")
-    lines.append(llm_line)
+    #lines.append(llm_line)
 
     return "\n".join(lines)
 
@@ -67,7 +67,7 @@ def _status_chips() -> list[Static]:
     llm_disabled = getattr(config.settings, "LLM_DISABLED", True)
     return [
         status_chip(f"{mode} mode", kind="success"),
-        status_chip("deterministic" if llm_disabled else "LLM planner enabled", kind="success" if llm_disabled else "warning"),
+        status_chip("deterministic (No LLM calls)" if llm_disabled else "LLM planner enabled", kind="success" if llm_disabled else "warning"),
     ]
 
 
