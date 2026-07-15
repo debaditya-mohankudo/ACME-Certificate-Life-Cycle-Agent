@@ -1,5 +1,5 @@
 # ACME Certificate Lifecycle Agent
-
+![alt text](<Screenshot 2026-07-15 at 17.29.05.png>)
 An intelligent, agentic TLS certificate manager built on **LangGraph** and **Claude**. It monitors certificate expiry across multiple domains, uses an LLM to plan and prioritize renewals, executes the full **ACME RFC 8555** flow against **any RFC 8555-compliant CA** (DigiCert, Let's Encrypt, or custom), and stores issued certificates as PEM files on the local filesystem — all on a configurable daily schedule.
 
 The lifecycle logic (monitor → plan → issue → renew → revoke) is protocol-agnostic — ACME is one issuance backend. Set `CERT_ISSUANCE_MODE=spiffe` and the same agent issues **SPIFFE SVIDs** (workload identity certs) via a local **SPIRE** deployment instead — attestation-based auth, no HTTP-01/DNS-01 challenge, no public CA — for agentic and service-mesh environments. Strictly either/or per running instance; see [DESIGN_SPIFFE_SVID_EXTENSION.md](doc/DESIGN_SPIFFE_SVID_EXTENSION.md).
