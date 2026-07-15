@@ -27,7 +27,7 @@ from textual.widgets import Footer, Header, Input, Select, Static
 from textual.worker import get_current_worker
 
 import config
-from diagnostics import diagnose, diagnose_known_acme_error
+from diagnostics import diagnose, diagnose_fatal_error, diagnose_known_acme_error
 from tui.subprocess_stream import stream_subprocess
 from tui.tui_widgets import EventFeed, bordered, breadcrumb_bar, log_ui
 
@@ -212,8 +212,13 @@ class RunScreen(Screen):
             # str() embeds it) — search the whole captured feed for a known
             # urn before falling back to the raw traceback tail, so the panel
             # explains *what* went wrong instead of just dumping stack trace.
+            # diagnose_fatal_error is checked first — it covers the narrower
+            # retry-fatal set (accountDoesNotExist, badKey, unauthorized,
+            # externalAccountRequired) that error_handler.py itself treats
+            # specially, so those get the same explanation here as they
+            # would via the structured-error path in diagnose().
             full_output = "\n".join(self._feed_lines)
-            known = diagnose_known_acme_error(full_output)
+            known = diagnose_fatal_error(full_output) or diagnose_known_acme_error(full_output)
             tail = next((line for line in reversed(self._feed_lines) if line.strip()), None)
             if known is not None:
                 panel.update(

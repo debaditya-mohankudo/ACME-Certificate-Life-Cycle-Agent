@@ -219,6 +219,53 @@ async def test_diagnosis_recognizes_known_acme_error_urn_in_raw_traceback(monkey
         assert "set MANAGED_DOMAINS to a real domain" in panel_text
 
 
+async def test_diagnosis_recognizes_fatal_error_pattern_in_raw_traceback(monkeypatch, tmp_path):
+    """Regression: reproduced live against a real Pebble instance — a stale
+    local account.key (left over from a prior Pebble container that had
+    reset its account DB) caused an uncaught AcmeError:
+    accountDoesNotExist. That's error_handler.py's own fatal-pattern set,
+    not diagnose_known_acme_error's table, and the traceback-fallback path
+    only checked the latter — so this case fell through to a raw stack-trace
+    dump instead of the existing (and correct) "delete ACCOUNT_KEY_PATH"
+    explanation. diagnose_fatal_error must be checked first."""
+    fake_script = tmp_path / "fake_main.py"
+    fake_script.write_text(
+        "import json\n"
+        "print(json.dumps({'level': 'INFO', 'message': 'starting'}))\n"
+        "raise RuntimeError("
+        "'acme.client.AcmeError: ACME 400: "
+        "urn:ietf:params:acme:error:accountDoesNotExist -- unable to find "
+        "existing account for only-return-existing request')\n"
+    )
+
+    import subprocess
+
+    import tui.subprocess_stream as stream_module
+
+    orig_popen = subprocess.Popen
+
+    def fake_popen(argv, **kwargs):
+        return orig_popen([sys.executable, str(fake_script)], **kwargs)
+
+    monkeypatch.setattr(stream_module.subprocess, "Popen", fake_popen)
+
+    app = _RunScreenApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        screen = app.screen
+        screen.query_one("#domain-input").value = "example.com"
+        screen.action_run()
+
+        import asyncio
+
+        await asyncio.sleep(0.5)
+        await pilot.pause()
+
+        panel_text = str(screen.query_one("#diagnosis-panel").render())
+        assert "stale or corrupted" in panel_text
+        assert "ACCOUNT_KEY_PATH" in panel_text
+
+
 async def test_save_log_action_writes_feed_to_file(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
     fake_script = tmp_path / "fake_main.py"
