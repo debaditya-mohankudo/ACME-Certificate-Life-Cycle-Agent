@@ -14,8 +14,6 @@ supersedes an earlier in-process design.
 """
 from __future__ import annotations
 
-import json
-import subprocess
 import sys
 from typing import Any
 
@@ -28,6 +26,7 @@ from textual.worker import get_current_worker
 
 from config import settings
 from diagnostics import diagnose
+from tui.subprocess_stream import stream_subprocess
 from tui.tui_widgets import EventFeed, bordered, log_ui
 
 CA_PROVIDER_CHOICES = [
@@ -126,34 +125,18 @@ class RunScreen(Screen):
         """
         worker = get_current_worker()
         argv = [sys.executable, "main.py", "--once", "--domains", *domains, "--ca-provider", ca_provider]
-        last_error: str | None = None
         challenge_mode = getattr(settings, "HTTP_CHALLENGE_MODE", "standalone")
         exit_code = 1
+        last_error: str | None = None
         try:
-            proc = subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-            assert proc.stdout is not None
-            for line in proc.stdout:
-                if worker.is_cancelled:
-                    proc.terminate()
-                    break
-                record = self._parse_jsonl_line(line)
-                self.app.call_from_thread(self._append_feed_line, line.rstrip("\n"), record)
-                if record and record.get("level") == "ERROR":
-                    last_error = record.get("message", line)
-            exit_code = proc.wait()
+            exit_code, last_error = stream_subprocess(
+                argv,
+                on_line=lambda raw, rec: self.app.call_from_thread(self._append_feed_line, raw, rec),
+                is_cancelled=lambda: worker.is_cancelled,
+            )
         finally:
             self._run_in_progress = False
             self.app.call_from_thread(self._finish_run, exit_code, last_error, domains, challenge_mode)
-
-    @staticmethod
-    def _parse_jsonl_line(line: str) -> dict[str, Any] | None:
-        line = line.strip()
-        if not line:
-            return None
-        try:
-            return json.loads(line)
-        except json.JSONDecodeError:
-            return None
 
     def _append_feed_line(self, raw_line: str, record: dict[str, Any] | None) -> None:
         feed = self.query_one("#event-feed", EventFeed)

@@ -16,7 +16,6 @@ textual = pytest.importorskip("textual")
 from textual.app import App  # noqa: E402
 
 from tui.screens.run import RunScreen  # noqa: E402
-import tui.screens.run as run_module  # noqa: E402
 
 pytestmark = pytest.mark.asyncio
 
@@ -83,12 +82,14 @@ async def test_run_button_launches_subprocess_and_streams_jsonl(monkeypatch, tmp
 
     import subprocess
 
+    import tui.subprocess_stream as stream_module
+
     orig_popen = subprocess.Popen
 
     def fake_popen(argv, **kwargs):
         return orig_popen([sys.executable, str(fake_script)], **kwargs)
 
-    monkeypatch.setattr(run_module.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(stream_module.subprocess, "Popen", fake_popen)
 
     app = _RunScreenApp()
     async with app.run_test() as pilot:
