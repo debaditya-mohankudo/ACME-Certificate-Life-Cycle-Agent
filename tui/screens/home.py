@@ -22,12 +22,13 @@ importing settings, not config.
 from __future__ import annotations
 
 from textual.app import ComposeResult
-from textual.containers import Vertical
+from textual.containers import Horizontal, Vertical
 from textual.screen import Screen
+from textual.widget import Widget
 from textual.widgets import Footer, Header, Static
 
 import config
-from tui.tui_widgets import bordered, log_ui
+from tui.tui_widgets import bordered, breadcrumb_bar, log_ui, stat_tile, status_chip
 
 
 def _format_config_summary() -> str:
@@ -61,6 +62,28 @@ def _format_config_summary() -> str:
     return "\n".join(lines)
 
 
+def _status_chips() -> list[Static]:
+    mode = getattr(config.settings, "CERT_ISSUANCE_MODE", "acme")
+    llm_disabled = getattr(config.settings, "LLM_DISABLED", True)
+    return [
+        status_chip(f"{mode} mode", kind="success"),
+        status_chip("deterministic" if llm_disabled else "LLM planner enabled", kind="success" if llm_disabled else "warning"),
+    ]
+
+
+def _stat_tiles() -> list[Widget]:
+    mode = getattr(config.settings, "CERT_ISSUANCE_MODE", "acme")
+    if mode == "spiffe":
+        svids = getattr(config.settings, "MANAGED_SPIFFE_IDS", []) or []
+        return [stat_tile("Managed SVIDs", str(len(svids)))]
+    domains = getattr(config.settings, "MANAGED_DOMAINS", []) or []
+    ca_provider = getattr(config.settings, "CA_PROVIDER", "?")
+    return [
+        stat_tile("Managed Domains", str(len(domains))),
+        stat_tile("CA Provider", ca_provider),
+    ]
+
+
 class HomeScreen(Screen):
     """What this app does, plus a read-only render of the active config."""
 
@@ -72,6 +95,7 @@ class HomeScreen(Screen):
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
+        yield breadcrumb_bar(["Home"], 0)
         yield Vertical(
             Static(
                 "ACME Certificate Lifecycle Agent — TUI\n\n"
@@ -82,6 +106,8 @@ class HomeScreen(Screen):
                 "[b]r[/b] Run a renewal   [b]d[/b] Domain status   [b]c[/b] Edit config",
                 id="intro",
             ),
+            Horizontal(*_status_chips(), classes="status-chips", id="status-chips-row"),
+            Horizontal(*_stat_tiles(), classes="stat-tiles", id="stat-tiles-row"),
             bordered(Static(_format_config_summary(), id="config-details"), "Active Configuration").add_class(
                 "panel"
             ),
@@ -97,13 +123,25 @@ class HomeScreen(Screen):
         self.refresh_summary()
 
     def refresh_summary(self) -> None:
-        """Re-render the config summary against the current config.settings.
-        Called explicitly from AcmeTuiApp.pop_screen (not just relying on
-        on_screen_resume above) — see app.py's comment: on_screen_resume
-        doesn't reliably fire on pop_screen in this Textual version, which
-        would otherwise leave this panel showing stale values after
-        ConfigScreen edits and pops back."""
+        """Re-render the config summary, status chips, and stat tiles against
+        the current config.settings. Called explicitly from
+        AcmeTuiApp.pop_screen (not just relying on on_screen_resume above) —
+        see app.py's comment: on_screen_resume doesn't reliably fire on
+        pop_screen in this Textual version, which would otherwise leave this
+        panel showing stale values after ConfigScreen edits and pops back.
+
+        Chips/tiles are Horizontal rows of child widgets, not a single
+        Static's text — .update() doesn't apply; remove and re-mount the
+        row's children instead."""
         self.query_one("#config-details", Static).update(_format_config_summary())
+
+        chips_row = self.query_one("#status-chips-row", Horizontal)
+        chips_row.remove_children()
+        chips_row.mount_all(_status_chips())
+
+        tiles_row = self.query_one("#stat-tiles-row", Horizontal)
+        tiles_row.remove_children()
+        tiles_row.mount_all(_stat_tiles())
 
     def action_run_screen(self) -> None:
         log_ui("key_pressed", screen="HomeScreen", key="r")

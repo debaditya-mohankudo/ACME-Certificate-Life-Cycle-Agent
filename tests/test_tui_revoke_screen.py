@@ -18,12 +18,13 @@ class _RevokeScreenApp(App):
 
 
 @pytest.mark.asyncio
-async def test_revoke_screen_composes_and_button_starts_enabled():
+async def test_revoke_screen_composes_with_inputs_enabled():
     app = _RevokeScreenApp()
     async with app.run_test() as pilot:
         await pilot.pause()
         assert app.screen.__class__.__name__ == "RevokeScreen"
-        assert app.screen.query_one("#revoke-button").disabled is False
+        assert app.screen.query_one("#domain-input").disabled is False
+        assert app.screen.query_one("#reason-select").disabled is False
 
 
 @pytest.mark.asyncio
@@ -32,15 +33,15 @@ async def test_run_active_disables_inputs():
     async with app.run_test() as pilot:
         await pilot.pause()
         screen = app.screen
-        button = screen.query_one("#revoke-button")
+        domain_input = screen.query_one("#domain-input")
 
         screen.run_active = True
         await pilot.pause()
-        assert button.disabled is True
+        assert domain_input.disabled is True
 
         screen.run_active = False
         await pilot.pause()
-        assert button.disabled is False
+        assert domain_input.disabled is False
 
 
 @pytest.mark.asyncio
@@ -68,7 +69,7 @@ async def test_revoke_button_launches_subprocess_and_streams_jsonl(monkeypatch, 
         await pilot.pause()
         screen = app.screen
         screen.query_one("#domain-input").value = "example.com"
-        screen.query_one("#revoke-button").press()
+        screen.action_revoke()
 
         import asyncio
 

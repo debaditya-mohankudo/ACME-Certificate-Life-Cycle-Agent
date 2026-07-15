@@ -25,12 +25,13 @@ class _RunScreenApp(App):
         self.push_screen(RunScreen())
 
 
-async def test_run_screen_composes_and_run_button_starts_enabled():
+async def test_run_screen_composes_with_inputs_enabled():
     app = _RunScreenApp()
     async with app.run_test() as pilot:
         await pilot.pause()
         assert app.screen.__class__.__name__ == "RunScreen"
-        assert app.screen.query_one("#run-button").disabled is False
+        assert app.screen.query_one("#domain-input").disabled is False
+        assert app.screen.query_one("#ca-provider-select").disabled is False
 
 
 async def test_run_active_reactive_disables_inputs():
@@ -43,15 +44,15 @@ async def test_run_active_reactive_disables_inputs():
     async with app.run_test() as pilot:
         await pilot.pause()
         screen = app.screen
-        button = screen.query_one("#run-button")
+        domain_input = screen.query_one("#domain-input")
 
         screen.run_active = True
         await pilot.pause()
-        assert button.disabled is True
+        assert domain_input.disabled is True
 
         screen.run_active = False
         await pilot.pause()
-        assert button.disabled is False
+        assert domain_input.disabled is False
 
 
 async def test_finish_run_failure_populates_diagnosis_panel():
@@ -96,7 +97,7 @@ async def test_run_button_launches_subprocess_and_streams_jsonl(monkeypatch, tmp
         await pilot.pause()
         screen = app.screen
         screen.query_one("#domain-input").value = "example.com"
-        screen.query_one("#run-button").press()
+        screen.action_run()
 
         # worker runs in a real thread; give it a moment to finish against
         # the fast fake script, then let Textual process the queued

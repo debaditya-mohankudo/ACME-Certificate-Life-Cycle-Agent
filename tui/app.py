@@ -1,24 +1,23 @@
 """AcmeTuiApp — entry point wiring HomeScreen/DomainStatusScreen/RunScreen/
-RevokeScreen into one Textual App, with a screen-stack-driven breadcrumb
-(mirroring crew-bug-hunter's update_breadcrumb) and the shared house palette.
+RevokeScreen into one Textual App, with a chip-style breadcrumb (adapted from
+docker_log_analyzer/tui.py's breadcrumb_bar() — see tui_widgets.py) and CSS
+driven by Textual's own theme variables ($accent/$panel/$success/$error/
+$warning/$text-muted) rather than hardcoded hex, so the app follows whatever
+theme the terminal/Textual is running with instead of a fixed palette.
 
 Launch via `python main.py --tui` (requires: uv sync --extra tui).
 """
 from __future__ import annotations
 
+import logging
+
 from textual.app import App
 from textual.worker import Worker, WorkerState
 
+from logger import JSONLFormatter
 from logger import logger as agent_logger
 from tui.screens.home import HomeScreen
 from tui.tui_widgets import log_ui
-
-# Shared palette — keep in sync with the CSS rules below.
-ACCENT = "#22d3ee"
-GREEN = "#4ade80"
-RED = "#f87171"
-AMBER = "#fbbf24"
-MUTED = "#5a6472"
 
 BREADCRUMB_LABELS = {
     "HomeScreen": "Home",
@@ -27,6 +26,35 @@ BREADCRUMB_LABELS = {
     "RevokeScreen": "Revoke",
     "ConfigScreen": "Edit Config",
 }
+
+
+def _redirect_stdout_logging_to_file(path: str = "tui.log") -> None:
+    """logger.py's LoggerDecorator unconditionally attaches a StreamHandler
+    (defaults to stderr) to the shared "agent" logger. That's fine for the
+    CLI (main.py), where JSONL-to-stdout is the intended output — but it
+    actively corrupts the TUI: Textual owns the terminal via alt-screen
+    mode, and any in-process logger.info/.warning/.error call (e.g.
+    DomainStatusScreen's refresh calling get_domain_statuses(), which
+    itself calls log.warning() on a cert parse failure) writes raw JSONL
+    text that flashes across the screen and gets wiped on Textual's next
+    repaint. Found live: "when i click on refresh (domain) i see the logs
+    transient."
+
+    RunScreen/RevokeScreen are unaffected by this — their subprocess's
+    stdout is a separate OS pipe this process reads and re-renders into
+    EventFeed, never touching the TUI's own terminal directly.
+
+    Swaps the StreamHandler for a FileHandler (same JSONLFormatter) so
+    structured logs are still captured, just not to the terminal Textual is
+    rendering into.
+    """
+    root_logger = agent_logger.logger
+    for handler in list(root_logger.handlers):
+        if isinstance(handler, logging.StreamHandler) and not isinstance(handler, logging.FileHandler):
+            root_logger.removeHandler(handler)
+    file_handler = logging.FileHandler(path)
+    file_handler.setFormatter(JSONLFormatter())
+    root_logger.addHandler(file_handler)
 
 
 class AcmeTuiApp(App):
@@ -40,30 +68,52 @@ class AcmeTuiApp(App):
     # crew-bug-hunter's identical convention (tui.py:399-403).
     BINDINGS = [("q", "quit", "Quit")]
 
-    CSS = f"""
-    Screen {{
-        background: #0d1119;
-    }}
-    .panel {{
-        border: round {MUTED};
-        border-title-color: {ACCENT};
-    }}
-    Button {{
+    CSS = """
+    .panel {
+        border: round $accent 50%;
+        border-title-color: $accent;
+        background: $panel;
+    }
+    Button {
         margin: 1 0;
-    }}
-    Button.-primary {{
-        background: {ACCENT};
-    }}
-    #intro {{ padding: 1; }}
-    #config-details {{ padding: 1; }}
-    #home-body {{ padding: 1 2; }}
-    #run-body {{ padding: 1 2; }}
-    #revoke-body {{ padding: 1 2; }}
-    #domain-status-body {{ padding: 1 2; }}
-    #config-body {{ padding: 1 2; }}
+    }
+    Button.-primary {
+        background: $accent;
+    }
+    #intro { padding: 1; }
+    #config-details { padding: 1; }
+    #home-body { padding: 1 2; }
+    #run-body { padding: 1 2; }
+    #revoke-body { padding: 1 2; }
+    #domain-status-body { padding: 1 2; }
+    #config-body { padding: 1 2; }
+
+    .breadcrumb-bar { height: auto; padding: 1 2; border-bottom: solid $accent 30%; align: left middle; }
+    .breadcrumb-chip { width: auto; height: 3; color: $text-muted; padding: 1 1; }
+    .breadcrumb-chip.active { color: $accent; text-style: bold; border: round $accent; padding: 0 1; }
+    .breadcrumb-sep { width: auto; height: 3; color: $text-muted; padding: 1 1; }
+
+    .status-chips { height: auto; margin-bottom: 1; }
+    .status-chip { width: auto; border: round $accent 50%; padding: 0 1; margin-right: 1; color: $text-muted; }
+    .status-chip.success { color: $success; border: round $success 50%; }
+    .status-chip.warning { color: $warning; border: round $warning 50%; }
+    .status-chip.error { color: $error; border: round $error 50%; }
+
+    .stat-tiles { height: auto; margin-top: 1; }
+    .stat-tile {
+        width: 1fr; height: auto; margin-right: 2; padding: 1 2;
+        border: round $accent 50%; background: $panel;
+    }
+    .stat-tile:last-of-type { margin-right: 0; }
+    .stat-tile-label { color: $text-muted; }
+    .stat-tile-value { text-style: bold; }
+
+    .section-divider { height: 1; border-bottom: dashed $accent 50%; margin: 1 0; }
+    .section-label { color: $text-muted; text-style: bold; margin-bottom: 1; }
     """
 
     def on_mount(self) -> None:
+        _redirect_stdout_logging_to_file()
         log_ui("app_mounted")
         self.push_screen(HomeScreen())
 

@@ -67,7 +67,7 @@ async def test_config_screen_rejects_invalid_combo_without_writing(isolated_env)
         screen = app.screen
         screen.query_one("#domains-input", Input).value = "new.example.com"
         screen.query_one("#challenge-mode-select", Select).value = "dns"  # no CLOUDFLARE_API_TOKEN set
-        screen.query_one("#save-button").press()
+        screen.action_save()
         await pilot.pause()
 
         assert app.screen.__class__.__name__ == "ConfigScreen"  # rejected, did not pop
@@ -92,7 +92,7 @@ async def test_config_screen_saves_valid_combo_and_home_screen_reflects_it(isola
         screen = app.screen
         screen.query_one("#ca-provider-select", Select).value = "letsencrypt"
         screen.query_one("#domains-input", Input).value = "new.example.com"
-        screen.query_one("#save-button").press()
+        screen.action_save()
         await pilot.pause()
 
         # regression: this only works if home.py/run.py/domain_status.py/

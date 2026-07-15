@@ -20,11 +20,11 @@ from textual.app import ComposeResult
 from textual.containers import Vertical
 from textual.reactive import reactive
 from textual.screen import Screen
-from textual.widgets import Button, Footer, Header, Input, Select
+from textual.widgets import Footer, Header, Input, Select
 from textual.worker import get_current_worker
 
 from tui.subprocess_stream import stream_subprocess
-from tui.tui_widgets import EventFeed, bordered, log_ui
+from tui.tui_widgets import EventFeed, bordered, breadcrumb_bar, log_ui
 
 REASON_CODE_CHOICES = [
     ("Unspecified", "0"),
@@ -37,7 +37,9 @@ REASON_CODE_CHOICES = [
 class RevokeScreen(Screen):
     """Domain/reason-code picker -> subprocess revoke -> live EventFeed."""
 
-    BINDINGS = [("escape", "pop_screen", "Back")]
+    # f2 — same reasoning as RunScreen/ConfigScreen (Input/Select consume
+    # printable keys while focused; no Button widget, keyboard-only design).
+    BINDINGS = [("escape", "pop_screen", "Back"), ("f2", "revoke", "Revoke")]
 
     run_active: reactive[bool] = reactive(False)  # see run.py's comment: never name this is_running
 
@@ -47,6 +49,7 @@ class RevokeScreen(Screen):
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
+        yield breadcrumb_bar(["Home", "Revoke"], 1)
         yield Vertical(
             bordered(
                 Input(placeholder="domain.com,other.com", id="domain-input"),
@@ -56,8 +59,7 @@ class RevokeScreen(Screen):
                 Select(REASON_CODE_CHOICES, id="reason-select", value="0"),
                 "RFC 5280 Reason Code",
             ).add_class("panel"),
-            Button("Revoke", id="revoke-button", variant="error"),
-            bordered(EventFeed(id="event-feed"), "Live Revocation").add_class("panel"),
+            bordered(EventFeed(id="event-feed"), "Live Revocation — press F2 to revoke").add_class("panel"),
             id="revoke-body",
         )
         yield Footer()
@@ -69,16 +71,13 @@ class RevokeScreen(Screen):
         log_ui("screen_resumed", screen="RevokeScreen")
 
     def watch_run_active(self, run_active: bool) -> None:
-        self.query_one("#revoke-button", Button).disabled = run_active
         self.query_one("#domain-input", Input).disabled = run_active
         self.query_one("#reason-select", Select).disabled = run_active
         feed = self.query_one("#event-feed", EventFeed)
-        feed.border_title = "Live Revocation — running…" if run_active else "Live Revocation"
+        feed.border_title = "Live Revocation — running…" if run_active else "Live Revocation — press F2 to revoke"
 
-    def on_button_pressed(self, event: Button.Pressed) -> None:
-        if event.button.id != "revoke-button":
-            return
-        log_ui("button_pressed", screen="RevokeScreen", button=event.button.id)
+    def action_revoke(self) -> None:
+        log_ui("key_pressed", screen="RevokeScreen", key="f2")
 
         if self._run_in_progress:
             self.notify("A revocation is already in progress.", severity="warning")

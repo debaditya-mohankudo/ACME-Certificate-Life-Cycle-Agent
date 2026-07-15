@@ -21,13 +21,13 @@ from textual.app import ComposeResult
 from textual.containers import Vertical
 from textual.reactive import reactive
 from textual.screen import Screen
-from textual.widgets import Button, Footer, Header, Input, Select, Static
+from textual.widgets import Footer, Header, Input, Select, Static
 from textual.worker import get_current_worker
 
 import config
 from diagnostics import diagnose
 from tui.subprocess_stream import stream_subprocess
-from tui.tui_widgets import EventFeed, bordered, log_ui
+from tui.tui_widgets import EventFeed, bordered, breadcrumb_bar, log_ui
 
 CA_PROVIDER_CHOICES = [
     ("Let's Encrypt (recommended)", "letsencrypt"),
@@ -42,7 +42,14 @@ CA_PROVIDER_CHOICES = [
 class RunScreen(Screen):
     """Domain/CA picker -> subprocess run -> live EventFeed -> failure diagnosis."""
 
-    BINDINGS = [("escape", "pop_screen", "Back")]
+    # f2, not a plain letter: this screen has focusable Input/Select widgets
+    # that consume printable key presses while typing, so a mnemonic like
+    # "r" would type into whichever field has focus instead of triggering
+    # Run — F-keys don't collide with text entry. Matches DomainStatusScreen's
+    # existing f5-for-refresh convention. No Button widget for this action —
+    # docker_log_analyzer/tui.py's TUI is keyboard-only by design; adopted
+    # here per explicit user feedback replacing a full-width clickable button.
+    BINDINGS = [("escape", "pop_screen", "Back"), ("f2", "run", "Run")]
 
     # Named run_active, not is_running: Screen/Widget already define a
     # built-in `is_running` property the framework uses internally to track
@@ -59,6 +66,7 @@ class RunScreen(Screen):
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
+        yield breadcrumb_bar(["Home", "Run"], 1)
         yield Vertical(
             bordered(
                 Input(
@@ -72,8 +80,7 @@ class RunScreen(Screen):
                 Select(CA_PROVIDER_CHOICES, id="ca-provider-select", value="letsencrypt_staging"),
                 "Certificate Authority",
             ).add_class("panel"),
-            Button("Run", id="run-button", variant="primary"),
-            bordered(EventFeed(id="event-feed"), "Live Run").add_class("panel"),
+            bordered(EventFeed(id="event-feed"), "Live Run — press F2 to run").add_class("panel"),
             bordered(Static("", id="diagnosis-panel"), "Diagnosis").add_class("panel"),
             id="run-body",
         )
@@ -87,16 +94,13 @@ class RunScreen(Screen):
         log_ui("screen_resumed", screen="RunScreen")
 
     def watch_run_active(self, run_active: bool) -> None:
-        self.query_one("#run-button", Button).disabled = run_active
         self.query_one("#domain-input", Input).disabled = run_active
         self.query_one("#ca-provider-select", Select).disabled = run_active
         feed = self.query_one("#event-feed", EventFeed)
-        feed.border_title = "Live Run — running…" if run_active else "Live Run"
+        feed.border_title = "Live Run — running…" if run_active else "Live Run — press F2 to run"
 
-    def on_button_pressed(self, event: Button.Pressed) -> None:
-        if event.button.id != "run-button":
-            return
-        log_ui("button_pressed", screen="RunScreen", button=event.button.id)
+    def action_run(self) -> None:
+        log_ui("key_pressed", screen="RunScreen", key="f2")
 
         if self._run_in_progress:
             self.notify("A run is already in progress.", severity="warning")

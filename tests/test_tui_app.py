@@ -98,3 +98,26 @@ async def test_handle_exception_is_logged_via_agent_logger():
 
     assert any("TUI unhandled exception: sync boom" in m for m in capture.messages)
     assert any(m == "unhandled_exception" for m in capture.messages)
+
+
+@pytest.mark.asyncio
+async def test_stdout_logging_redirected_to_file_on_mount(monkeypatch, tmp_path):
+    """Regression: raw StreamHandler output flashes across the TUI's screen
+    and gets wiped on the next Textual repaint (found live: "when i click
+    on refresh (domain) i see the logs transient"). on_mount must swap it
+    for a FileHandler before any screen's own log calls fire."""
+    monkeypatch.chdir(tmp_path)
+    from logger import logger as agent_logger
+
+    app = AcmeTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        handlers = agent_logger.logger.handlers
+        assert not any(
+            isinstance(h, logging.StreamHandler) and not isinstance(h, logging.FileHandler) for h in handlers
+        )
+        assert any(isinstance(h, logging.FileHandler) for h in handlers)
+
+    assert (tmp_path / "tui.log").exists()
+    log_contents = (tmp_path / "tui.log").read_text()
+    assert "app_mounted" in log_contents

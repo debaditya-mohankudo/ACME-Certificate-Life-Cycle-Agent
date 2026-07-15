@@ -24,10 +24,10 @@ from dotenv import set_key
 from textual.app import ComposeResult
 from textual.containers import Vertical
 from textual.screen import Screen
-from textual.widgets import Button, Footer, Header, Input, Select
+from textual.widgets import Footer, Header, Input, Select, Static
 
 import config
-from tui.tui_widgets import bordered, log_ui
+from tui.tui_widgets import bordered, breadcrumb_bar, log_ui
 
 CA_PROVIDER_CHOICES = [
     ("Let's Encrypt (recommended)", "letsencrypt"),
@@ -50,10 +50,17 @@ _ENV_PATH = Path(".env")
 class ConfigScreen(Screen):
     """Edit CA provider / managed domains / challenge mode, save to .env."""
 
-    BINDINGS = [("escape", "pop_screen", "Back")]
+    # f2, not a plain letter — same reasoning as RunScreen: Input/Select
+    # widgets on this screen consume printable keys while focused, so a
+    # mnemonic letter binding would type into the focused field instead of
+    # saving. No Button widget — see run.py's module docstring for why
+    # (docker_log_analyzer/tui.py's keyboard-only design, adopted per
+    # explicit user feedback replacing a full-width clickable button).
+    BINDINGS = [("escape", "pop_screen", "Back"), ("f2", "save", "Save")]
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
+        yield breadcrumb_bar(["Home", "Edit Config"], 1)
         yield Vertical(
             bordered(
                 Select(CA_PROVIDER_CHOICES, id="ca-provider-select", value=self._current_ca_provider()),
@@ -71,7 +78,8 @@ class ConfigScreen(Screen):
                 Select(CHALLENGE_MODE_CHOICES, id="challenge-mode-select", value=self._current_challenge_mode()),
                 "Validation Type",
             ).add_class("panel"),
-            Button("Save", id="save-button", variant="primary"),
+            Static(classes="section-divider"),
+            Static("Press F2 to save, Escape to discard", classes="section-label"),
             id="config-body",
         )
         yield Footer()
@@ -92,10 +100,8 @@ class ConfigScreen(Screen):
     def on_screen_resume(self) -> None:
         log_ui("screen_resumed", screen="ConfigScreen")
 
-    def on_button_pressed(self, event: Button.Pressed) -> None:
-        if event.button.id != "save-button":
-            return
-        log_ui("button_pressed", screen="ConfigScreen", button=event.button.id)
+    def action_save(self) -> None:
+        log_ui("key_pressed", screen="ConfigScreen", key="f2")
 
         domains_raw = self.query_one("#domains-input", Input).value.strip()
         domains = [d.strip() for d in domains_raw.split(",") if d.strip()]

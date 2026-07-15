@@ -20,8 +20,9 @@ import logging
 from typing import Any
 
 from rich.markup import escape as escape_markup
+from textual.containers import Horizontal, Vertical
 from textual.widget import Widget
-from textual.widgets import RichLog
+from textual.widgets import RichLog, Static
 
 from logger import logger as _agent_logger
 
@@ -33,6 +34,48 @@ def bordered(widget: Widget, title: str) -> Widget:
     query_one(...).border_title = ... follow-up line."""
     widget.border_title = title
     return widget
+
+
+def breadcrumb_bar(labels: list[str], active_index: int) -> Horizontal:
+    """Chip-style breadcrumb — "Home › Run" rendered as bordered, colored
+    chip widgets (active chip highlighted) rather than plain text, adapted
+    from docker_log_analyzer/tui.py's breadcrumb_bar(). That version is a
+    fixed linear stepper (Connect > Window > Menu > Result) for a wizard
+    flow; this app's navigation is hub-and-spoke (Home, plus whichever
+    screen was pushed from it), so callers pass exactly ["Home", <current
+    screen label>] with active_index=1, or ["Home"] with active_index=0 for
+    HomeScreen itself — same chip visuals, no fixed step count assumed.
+
+    Yield at the top of every screen's compose(), above the screen's own
+    content, mirroring the vendored pattern's placement.
+    """
+    chips: list[Widget] = []
+    for i, label in enumerate(labels):
+        classes = "breadcrumb-chip active" if i == active_index else "breadcrumb-chip"
+        chips.append(Static(label, classes=classes))
+        if i < len(labels) - 1:
+            chips.append(Static("›", classes="breadcrumb-sep"))
+    return Horizontal(*chips, classes="breadcrumb-bar")
+
+
+def status_chip(text: str, kind: str = "neutral") -> Static:
+    """Small bordered pill indicator — e.g. "acme mode", "deterministic",
+    "✗ run failed". `kind` selects the CSS class (neutral/success/warning/
+    error) driving the chip's border/text color via AcmeTuiApp's theme-
+    variable CSS rules (.status-chip.success/.warning/.error)."""
+    classes = "status-chip" if kind == "neutral" else f"status-chip {kind}"
+    return Static(text, classes=classes)
+
+
+def stat_tile(label: str, value: str) -> Widget:
+    """Bordered label/value box for a row of summary numbers (e.g. domain
+    count, days until soonest expiry) — reads better at a glance than the
+    same numbers embedded in a paragraph of text."""
+    return Vertical(
+        Static(value, classes="stat-tile-value"),
+        Static(label, classes="stat-tile-label"),
+        classes="stat-tile",
+    )
 
 
 def step_prefix(index: int, total: int) -> str:

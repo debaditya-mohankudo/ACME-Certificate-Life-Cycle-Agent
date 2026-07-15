@@ -14,10 +14,10 @@ from rich.text import Text
 from textual.app import ComposeResult
 from textual.containers import Vertical
 from textual.screen import Screen
-from textual.widgets import Button, DataTable, Footer, Header
+from textual.widgets import DataTable, Footer, Header
 
 import config
-from tui.tui_widgets import bordered, log_ui
+from tui.tui_widgets import bordered, breadcrumb_bar, log_ui
 
 _STATUS_COLOR = {
     "valid": "green",
@@ -35,9 +35,9 @@ class DomainStatusScreen(Screen):
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
+        yield breadcrumb_bar(["Home", "Domain Status"], 1)
         yield Vertical(
-            Button("Refresh", id="refresh-button"),
-            bordered(DataTable(id="domain-table"), "Managed Domains").add_class("panel"),
+            bordered(DataTable(id="domain-table"), "Managed Domains — press F5 to refresh").add_class("panel"),
             id="domain-status-body",
         )
         yield Footer()
@@ -50,12 +50,6 @@ class DomainStatusScreen(Screen):
 
     def on_screen_resume(self) -> None:
         log_ui("screen_resumed", screen="DomainStatusScreen")
-
-    def on_button_pressed(self, event: Button.Pressed) -> None:
-        if event.button.id != "refresh-button":
-            return
-        log_ui("button_pressed", screen="DomainStatusScreen", button=event.button.id)
-        self._refresh()
 
     def action_refresh(self) -> None:
         log_ui("key_pressed", screen="DomainStatusScreen", key="f5")
