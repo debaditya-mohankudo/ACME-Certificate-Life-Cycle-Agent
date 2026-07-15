@@ -71,15 +71,28 @@ def _status_chips() -> list[Static]:
     ]
 
 
+def _list_value(items: list[str], max_shown: int = 3) -> str:
+    """Comma-separated names for a stat tile's value, truncated with a
+    "+N more" suffix so a long MANAGED_DOMAINS list doesn't blow out the
+    tile's width — the tile is meant to show the actual names at a glance,
+    not just a count, per explicit user feedback ("its not showing the
+    domain names")."""
+    if not items:
+        return "(none)"
+    shown = ", ".join(items[:max_shown])
+    remaining = len(items) - max_shown
+    return f"{shown} +{remaining} more" if remaining > 0 else shown
+
+
 def _stat_tiles() -> list[Widget]:
     mode = getattr(config.settings, "CERT_ISSUANCE_MODE", "acme")
     if mode == "spiffe":
         svids = getattr(config.settings, "MANAGED_SPIFFE_IDS", []) or []
-        return [stat_tile("Managed SVIDs", str(len(svids)))]
+        return [stat_tile(f"Managed SVIDs ({len(svids)})", _list_value(svids))]
     domains = getattr(config.settings, "MANAGED_DOMAINS", []) or []
     ca_provider = getattr(config.settings, "CA_PROVIDER", "?")
     return [
-        stat_tile("Managed Domains", str(len(domains))),
+        stat_tile(f"Managed Domains ({len(domains)})", _list_value(domains)),
         stat_tile("CA Provider", ca_provider),
     ]
 

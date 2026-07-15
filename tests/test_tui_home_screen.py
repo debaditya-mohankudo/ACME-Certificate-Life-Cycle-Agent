@@ -50,3 +50,27 @@ def test_format_config_summary_acme_mode(monkeypatch):
     assert "Deterministic mode (no LLM calls)" in summary
     # SPIFFE-only fields must never be accessed in acme mode
     assert "SPIFFE" not in summary
+
+
+@pytest.mark.asyncio
+async def test_stat_tiles_show_domain_names_not_just_count(monkeypatch):
+    """Regression: the Managed Domains stat tile originally showed only a
+    count ("3") — user feedback: "its not showing the domain names". The
+    tile's prominent value must be the actual names, with the count moved
+    to the muted caption."""
+    monkeypatch.setattr(home_module.config, "settings", _FakeAcmeSettings())
+
+    app = _HomeScreenApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        values = list(app.screen.query(".stat-tile-value"))
+        labels = list(app.screen.query(".stat-tile-label"))
+        assert str(values[0].render()) == "example.com, shop.example.com"
+        assert str(labels[0].render()) == "Managed Domains (2)"
+
+
+def test_list_value_truncates_long_lists():
+    assert home_module._list_value([]) == "(none)"
+    assert home_module._list_value(["a.com"]) == "a.com"
+    assert home_module._list_value(["a.com", "b.com", "c.com"]) == "a.com, b.com, c.com"
+    assert home_module._list_value(["a.com", "b.com", "c.com", "d.com"]) == "a.com, b.com, c.com +1 more"
