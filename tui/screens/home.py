@@ -115,8 +115,7 @@ class HomeScreen(Screen):
                 "A deterministic LangGraph state machine that automates TLS "
                 "certificate renewal via ACME (or SPIFFE SVID issuance). This "
                 "TUI drives the same CLI (main.py) a terminal user would — it "
-                "never bypasses the graph or the CLI's own safety checks.\n\n"
-                "[b]r[/b] Run a renewal   [b]d[/b] Domain status   [b]c[/b] Edit config",
+                "never bypasses the graph or the CLI's own safety checks.",
                 id="intro",
             ),
             Horizontal(*_status_chips(), classes="status-chips", id="status-chips-row"),
