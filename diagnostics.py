@@ -13,6 +13,7 @@ amount of DNS/HTTP diagnosis will fix them.
 """
 from __future__ import annotations
 
+import re
 import shutil
 import subprocess
 from dataclasses import dataclass, field
@@ -21,6 +22,76 @@ from agent.nodes.error_handler import _FATAL_ERROR_PATTERNS, _is_fatal_error
 
 _DIG_TIMEOUT = 10
 _CURL_TIMEOUT = 10
+
+# ACME error urn suffixes (RFC 8555 §6.7) this module knows how to explain in
+# plain English, beyond error_handler's narrower _FATAL_ERROR_PATTERNS (which
+# only covers the subset that changes *retry* behavior — this list is display
+# diagnosis only and must never feed back into retry/abort decisions, per
+# CLAUDE.md: "Retry logic lives only in error_handler + retry_scheduler").
+_ACME_ERROR_URN_RE = re.compile(r"urn:ietf:params:acme:error:(\w+)")
+
+_KNOWN_ACME_ERRORS: dict[str, tuple[str, str]] = {
+    "rejectedidentifier": (
+        "The CA refuses to issue for this domain, by policy",
+        "This is not a transient failure and retrying will not help. Common "
+        "causes: (1) the domain is an IANA-reserved documentation name like "
+        "example.com/example.org/example.net — these can never be issued for "
+        "by any public CA; (2) the domain is on the CA's internal denylist "
+        "(phishing/abuse); (3) the TLD isn't supported by this CA. Next step: "
+        "set MANAGED_DOMAINS to a real domain you control and own, then retry.",
+    ),
+    "malformed": (
+        "The CA rejected the request as malformed",
+        "The ACME request itself (JWS, CSR, or order payload) didn't parse or "
+        "didn't match RFC 8555's expected shape — this points at a client-side "
+        "bug, not a DNS/network issue. Next step: check the full error detail "
+        "text below for which field was rejected; do not retry blindly.",
+    ),
+    "ratelimited": (
+        "The CA's rate limit was hit for this account or domain",
+        "Public CAs cap issuances per domain/account per time window (Let's "
+        "Encrypt: 5 duplicate certs/week, 300 new orders/account/3h at time of "
+        "writing). Next step: wait for the window to reset — retrying "
+        "immediately will fail again. If this happens repeatedly, batch fewer "
+        "domains per run or switch to letsencrypt_staging for testing.",
+    ),
+    "caa": (
+        "A CAA DNS record is blocking this CA from issuing",
+        "The domain's CAA record whitelists a different certificate authority. "
+        "Next step: check `dig CAA <domain>` and either add an issue entry for "
+        "this CA or switch CA_PROVIDER to the one the CAA record allows.",
+    ),
+    "connection": (
+        "The CA couldn't reach this server to validate the challenge",
+        "The CA's validation servers timed out or got refused connecting to "
+        "this domain. Next step: run the HTTP-01/DNS-01 diagnosis for this "
+        "domain's challenge mode to confirm reachability from the public "
+        "internet (not just locally).",
+    ),
+    "dns": (
+        "The CA's DNS lookup for this domain failed",
+        "The CA couldn't resolve a required DNS record (A/AAAA for HTTP-01, "
+        "TXT for DNS-01) for this domain at all. Next step: confirm the domain "
+        "has a public DNS zone and the expected record type exists — `dig "
+        "<domain> A` / `dig TXT _acme-challenge.<domain>`.",
+    ),
+}
+
+
+def diagnose_known_acme_error(error_text: str) -> DiagnosisResult | None:
+    """Plain-English explanation for any RFC 8555 error urn this module
+    recognizes, independent of error_handler's retry-fatal subset. Returns
+    None if no known urn is found — caller falls through to challenge-type
+    diagnosis or a raw-tail fallback."""
+    match = _ACME_ERROR_URN_RE.search(error_text.lower())
+    if match is None:
+        return None
+    urn_type = match.group(1)
+    known = _KNOWN_ACME_ERRORS.get(urn_type)
+    if known is None:
+        return None
+    title, explanation = known
+    return DiagnosisResult(summary=f"{title}.\n\n{explanation}", details=[error_text])
 
 
 @dataclass

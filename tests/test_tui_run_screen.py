@@ -155,6 +155,50 @@ async def test_diagnosis_falls_back_to_raw_traceback_tail_when_no_error_line(mon
         assert "RuntimeError: boom traceback" in panel_text
 
 
+async def test_diagnosis_recognizes_known_acme_error_urn_in_raw_traceback(monkeypatch, tmp_path):
+    """Regression: user reported the raw-traceback fallback panel was
+    unreadable for a server maintainer — a rejectedIdentifier urn buried in an
+    uncaught AcmeError's traceback was shown as a bare stack-trace line
+    instead of an explanation. The panel must now recognize known RFC 8555
+    error urns in the captured output and explain cause + next step."""
+    fake_script = tmp_path / "fake_main.py"
+    fake_script.write_text(
+        "import json\n"
+        "print(json.dumps({'level': 'INFO', 'message': 'starting'}))\n"
+        "raise RuntimeError("
+        "'acme.client.AcmeError: ACME 400: "
+        "urn:ietf:params:acme:error:rejectedIdentifier -- Cannot issue for "
+        "\"example.com\": forbidden by policy')\n"
+    )
+
+    import subprocess
+
+    import tui.subprocess_stream as stream_module
+
+    orig_popen = subprocess.Popen
+
+    def fake_popen(argv, **kwargs):
+        return orig_popen([sys.executable, str(fake_script)], **kwargs)
+
+    monkeypatch.setattr(stream_module.subprocess, "Popen", fake_popen)
+
+    app = _RunScreenApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        screen = app.screen
+        screen.query_one("#domain-input").value = "example.com"
+        screen.action_run()
+
+        import asyncio
+
+        await asyncio.sleep(0.5)
+        await pilot.pause()
+
+        panel_text = str(screen.query_one("#diagnosis-panel").render())
+        assert "refuses to issue for this domain, by policy" in panel_text
+        assert "set MANAGED_DOMAINS to a real domain" in panel_text
+
+
 async def test_save_log_action_writes_feed_to_file(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
     fake_script = tmp_path / "fake_main.py"

@@ -27,7 +27,7 @@ from textual.widgets import Footer, Header, Input, Select, Static
 from textual.worker import get_current_worker
 
 import config
-from diagnostics import diagnose
+from diagnostics import diagnose, diagnose_known_acme_error
 from tui.subprocess_stream import stream_subprocess
 from tui.tui_widgets import EventFeed, bordered, breadcrumb_bar, log_ui
 
@@ -196,11 +196,20 @@ class RunScreen(Screen):
             # exception (e.g. an AcmeError propagating out of graph.invoke()
             # unhandled) printed as a raw traceback rather than through the
             # structured logger, so stream_subprocess never saw a
-            # level=="ERROR" record to capture. The traceback's own summary
-            # line (the last non-empty line) is still useful — show it
-            # directly rather than a dead-end "nothing captured" message.
+            # level=="ERROR" record to capture. The traceback text usually
+            # still contains the ACME error urn verbatim (e.g. AcmeError's
+            # str() embeds it) — search the whole captured feed for a known
+            # urn before falling back to the raw traceback tail, so the panel
+            # explains *what* went wrong instead of just dumping stack trace.
+            full_output = "\n".join(self._feed_lines)
+            known = diagnose_known_acme_error(full_output)
             tail = next((line for line in reversed(self._feed_lines) if line.strip()), None)
-            if tail:
+            if known is not None:
+                panel.update(
+                    f"{known.summary}\n\n(Detected from an unhandled exception, not a "
+                    f"structured error log — raw detail: {tail})"
+                )
+            elif tail:
                 panel.update(f"Run failed with an unhandled error (not a structured ACME error):\n\n{tail}")
             else:
                 panel.update("Run failed but no output was captured — check the feed above.")
