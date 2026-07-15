@@ -110,3 +110,89 @@ async def test_run_button_launches_subprocess_and_streams_jsonl(monkeypatch, tmp
         assert screen._run_in_progress is False
         assert screen.run_active is False
         assert screen.query_one("#diagnosis-panel").display is True
+
+
+async def test_diagnosis_falls_back_to_raw_traceback_tail_when_no_error_line(monkeypatch, tmp_path):
+    """Regression: an *uncaught* exception (e.g. AcmeError propagating out of
+    graph.invoke() unhandled) prints a raw Python traceback, not a
+    level=="ERROR" JSONL line — found live running against letsencrypt_staging
+    with a policy-rejected domain (main.py has no top-level try/except around
+    graph.invoke()). Previously the diagnosis panel showed a dead-end
+    "nothing captured" message; it must now show the traceback's own summary
+    line instead."""
+    fake_script = tmp_path / "fake_main.py"
+    fake_script.write_text(
+        "import json\n"
+        "print(json.dumps({'level': 'INFO', 'message': 'starting'}))\n"
+        "raise RuntimeError('boom traceback')\n"
+    )
+
+    import subprocess
+
+    import tui.subprocess_stream as stream_module
+
+    orig_popen = subprocess.Popen
+
+    def fake_popen(argv, **kwargs):
+        return orig_popen([sys.executable, str(fake_script)], **kwargs)
+
+    monkeypatch.setattr(stream_module.subprocess, "Popen", fake_popen)
+
+    app = _RunScreenApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        screen = app.screen
+        screen.query_one("#domain-input").value = "example.com"
+        screen.action_run()
+
+        import asyncio
+
+        await asyncio.sleep(0.5)
+        await pilot.pause()
+
+        panel_text = str(screen.query_one("#diagnosis-panel").render())
+        assert "unhandled error" in panel_text
+        assert "RuntimeError: boom traceback" in panel_text
+
+
+async def test_save_log_action_writes_feed_to_file(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    fake_script = tmp_path / "fake_main.py"
+    fake_script.write_text(
+        "import json\nprint(json.dumps({'level': 'INFO', 'message': 'starting'}))\n"
+    )
+
+    import subprocess
+
+    import tui.subprocess_stream as stream_module
+
+    orig_popen = subprocess.Popen
+
+    def fake_popen(argv, **kwargs):
+        return orig_popen([sys.executable, str(fake_script)], **kwargs)
+
+    monkeypatch.setattr(stream_module.subprocess, "Popen", fake_popen)
+
+    app = _RunScreenApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        screen = app.screen
+
+        # nothing run yet -> warns, writes nothing
+        screen.action_save_log()
+        await pilot.pause()
+        assert not list(tmp_path.glob("run-log-*.txt"))
+
+        screen.query_one("#domain-input").value = "example.com"
+        screen.action_run()
+        import asyncio
+
+        await asyncio.sleep(0.3)
+        await pilot.pause()
+
+        screen.action_save_log()
+        await pilot.pause()
+
+        saved = list(tmp_path.glob("run-log-*.txt"))
+        assert len(saved) == 1
+        assert "starting" in saved[0].read_text()

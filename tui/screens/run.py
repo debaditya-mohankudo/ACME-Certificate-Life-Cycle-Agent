@@ -15,6 +15,8 @@ supersedes an earlier in-process design.
 from __future__ import annotations
 
 import sys
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 from textual.app import ComposeResult
@@ -49,7 +51,11 @@ class RunScreen(Screen):
     # existing f5-for-refresh convention. No Button widget for this action —
     # docker_log_analyzer/tui.py's TUI is keyboard-only by design; adopted
     # here per explicit user feedback replacing a full-width clickable button.
-    BINDINGS = [("escape", "pop_screen", "Back"), ("f2", "run", "Run")]
+    BINDINGS = [
+        ("escape", "pop_screen", "Back"),
+        ("f2", "run", "Run"),
+        ("f3", "save_log", "Save Log"),
+    ]
 
     # Named run_active, not is_running: Screen/Widget already define a
     # built-in `is_running` property the framework uses internally to track
@@ -63,6 +69,7 @@ class RunScreen(Screen):
     def __init__(self) -> None:
         super().__init__()
         self._run_in_progress = False
+        self._feed_lines: list[str] = []
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
@@ -115,9 +122,21 @@ class RunScreen(Screen):
 
         self.query_one("#diagnosis-panel", Static).display = False
         self.query_one("#event-feed", EventFeed).clear()
+        self._feed_lines = []
         self._run_in_progress = True
         self.run_active = True
         self.run_worker(lambda: self._do_run(domains, ca_provider), thread=True)
+
+    def action_save_log(self) -> None:
+        log_ui("key_pressed", screen="RunScreen", key="f3")
+        if not self._feed_lines:
+            self.notify("Nothing to save yet — run first.", severity="warning")
+            return
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+        path = Path(f"run-log-{timestamp}.txt")
+        path.write_text("\n".join(self._feed_lines) + "\n")
+        log_ui("run_log_saved", screen="RunScreen", path=str(path))
+        self.notify(f"Saved to {path}", severity="information")
 
     def _do_run(self, domains: list[str], ca_provider: str) -> None:
         """Runs in a worker thread (see module docstring — this is a real OS
@@ -143,6 +162,7 @@ class RunScreen(Screen):
             self.app.call_from_thread(self._finish_run, exit_code, last_error, domains, challenge_mode)
 
     def _append_feed_line(self, raw_line: str, record: dict[str, Any] | None) -> None:
+        self._feed_lines.append(raw_line)
         feed = self.query_one("#event-feed", EventFeed)
         if record is None:
             feed.write_event("context_log", EventFeed.escape(raw_line))
@@ -172,7 +192,18 @@ class RunScreen(Screen):
             )
             panel.update(result.summary)
         else:
-            panel.update("Run failed but no ERROR-level log line was captured — check the feed above.")
+            # No ERROR-level JSONL line — most commonly an *uncaught* Python
+            # exception (e.g. an AcmeError propagating out of graph.invoke()
+            # unhandled) printed as a raw traceback rather than through the
+            # structured logger, so stream_subprocess never saw a
+            # level=="ERROR" record to capture. The traceback's own summary
+            # line (the last non-empty line) is still useful — show it
+            # directly rather than a dead-end "nothing captured" message.
+            tail = next((line for line in reversed(self._feed_lines) if line.strip()), None)
+            if tail:
+                panel.update(f"Run failed with an unhandled error (not a structured ACME error):\n\n{tail}")
+            else:
+                panel.update("Run failed but no output was captured — check the feed above.")
         panel.display = True
 
     def action_pop_screen(self) -> None:

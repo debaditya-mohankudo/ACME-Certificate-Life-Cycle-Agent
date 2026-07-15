@@ -15,6 +15,8 @@ that behavior.
 from __future__ import annotations
 
 import sys
+from datetime import datetime, timezone
+from pathlib import Path
 
 from textual.app import ComposeResult
 from textual.containers import Vertical
@@ -39,13 +41,18 @@ class RevokeScreen(Screen):
 
     # f2 — same reasoning as RunScreen/ConfigScreen (Input/Select consume
     # printable keys while focused; no Button widget, keyboard-only design).
-    BINDINGS = [("escape", "pop_screen", "Back"), ("f2", "revoke", "Revoke")]
+    BINDINGS = [
+        ("escape", "pop_screen", "Back"),
+        ("f2", "revoke", "Revoke"),
+        ("f3", "save_log", "Save Log"),
+    ]
 
     run_active: reactive[bool] = reactive(False)  # see run.py's comment: never name this is_running
 
     def __init__(self) -> None:
         super().__init__()
         self._run_in_progress = False
+        self._feed_lines: list[str] = []
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
@@ -91,9 +98,21 @@ class RevokeScreen(Screen):
         reason = self.query_one("#reason-select", Select).value
 
         self.query_one("#event-feed", EventFeed).clear()
+        self._feed_lines = []
         self._run_in_progress = True
         self.run_active = True
         self.run_worker(lambda: self._do_revoke(domains, reason), thread=True)
+
+    def action_save_log(self) -> None:
+        log_ui("key_pressed", screen="RevokeScreen", key="f3")
+        if not self._feed_lines:
+            self.notify("Nothing to save yet — run first.", severity="warning")
+            return
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+        path = Path(f"revoke-log-{timestamp}.txt")
+        path.write_text("\n".join(self._feed_lines) + "\n")
+        log_ui("run_log_saved", screen="RevokeScreen", path=str(path))
+        self.notify(f"Saved to {path}", severity="information")
 
     def _do_revoke(self, domains: list[str], reason: str) -> None:
         worker = get_current_worker()
@@ -110,6 +129,7 @@ class RevokeScreen(Screen):
             self.app.call_from_thread(self._finish_run, exit_code, domains)
 
     def _append_feed_line(self, raw_line: str, record: dict | None) -> None:
+        self._feed_lines.append(raw_line)
         feed = self.query_one("#event-feed", EventFeed)
         if record is None:
             feed.write_event("context_log", EventFeed.escape(raw_line))

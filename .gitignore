@@ -44,6 +44,10 @@ Thumbs.db
 *.log
 logs/
 
+# TUI saved run/revoke logs (RunScreen/RevokeScreen's F3 "Save Log" action)
+run-log-*.txt
+revoke-log-*.txt
+
 # External tool run artifacts (e.g. SeniorDevAgent review_graph checkpoints)
 runs/
 
