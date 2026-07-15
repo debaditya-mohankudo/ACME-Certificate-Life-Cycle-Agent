@@ -110,6 +110,15 @@ class AcmeTuiApp(App):
 
     .section-divider { height: 1; border-bottom: dashed $accent 50%; margin: 1 0; }
     .section-label { color: $text-muted; text-style: bold; margin-bottom: 1; }
+
+    /* Select's built-in border/highlight defaults to Textual's stock blue
+    ($border/$border-blurred) which clashes with the orange $accent used by
+    every .panel/.status-chip/.stat-tile border elsewhere — override both
+    the closed control and the open dropdown overlay to match. */
+    SelectCurrent { border: tall $accent 50%; }
+    Select:focus > SelectCurrent { border: tall $accent; }
+    Select > SelectOverlay { border: tall $accent; }
+    SelectOverlay > .option-list--option-highlighted { background: $accent 40%; }
     """
 
     def on_mount(self) -> None:
