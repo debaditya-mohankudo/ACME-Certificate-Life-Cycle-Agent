@@ -15,6 +15,7 @@ textual = pytest.importorskip("textual")
 
 from textual.app import App  # noqa: E402
 
+import tui.screens.run as run_module  # noqa: E402
 from tui.screens.run import RunScreen  # noqa: E402
 
 pytestmark = pytest.mark.asyncio
@@ -32,6 +33,25 @@ async def test_run_screen_composes_with_inputs_enabled():
         assert app.screen.__class__.__name__ == "RunScreen"
         assert app.screen.query_one("#domain-input").disabled is False
         assert app.screen.query_one("#ca-provider-select").disabled is False
+
+
+class _FakeCustomCaSettings:
+    CA_PROVIDER = "custom"
+    MANAGED_DOMAINS = ["pebble-test.localhost"]
+    HTTP_CHALLENGE_MODE = "standalone"
+
+
+async def test_ca_provider_select_defaults_to_configured_provider(monkeypatch):
+    """Regression: this screen's CA provider Select was hardcoded to
+    'letsencrypt_staging', silently diverging from whatever ConfigScreen had
+    just saved to .env (e.g. 'custom' for Pebble testing) — reported live by
+    a user who saved CA_PROVIDER=custom via ConfigScreen, then saw
+    letsencrypt_staging pre-selected on RunScreen instead."""
+    monkeypatch.setattr(run_module.config, "settings", _FakeCustomCaSettings())
+    app = _RunScreenApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        assert app.screen.query_one("#ca-provider-select").value == "custom"
 
 
 async def test_run_active_reactive_disables_inputs():

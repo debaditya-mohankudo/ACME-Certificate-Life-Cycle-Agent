@@ -71,6 +71,17 @@ class RunScreen(Screen):
         self._run_in_progress = False
         self._feed_lines: list[str] = []
 
+    @staticmethod
+    def _current_ca_provider() -> str:
+        """Mirrors ConfigScreen's own default-resolution logic (see
+        tui/screens/config_edit.py) — this screen must reflect the CA
+        provider actually saved in .env, not a hardcoded guess. Previously
+        hardcoded to 'letsencrypt_staging', which silently diverged from
+        whatever the user had just saved via ConfigScreen (e.g. 'custom' for
+        Pebble testing) — reported live by a user running Pebble."""
+        value = getattr(config.settings, "CA_PROVIDER", "letsencrypt_staging")
+        return value if value in {c[1] for c in CA_PROVIDER_CHOICES} else "letsencrypt_staging"
+
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
         yield breadcrumb_bar(["Home", "Run"], 1)
@@ -84,7 +95,7 @@ class RunScreen(Screen):
                 "Domain(s) — comma separated",
             ).add_class("panel"),
             bordered(
-                Select(CA_PROVIDER_CHOICES, id="ca-provider-select", value="letsencrypt_staging"),
+                Select(CA_PROVIDER_CHOICES, id="ca-provider-select", value=self._current_ca_provider()),
                 "Certificate Authority",
             ).add_class("panel"),
             bordered(EventFeed(id="event-feed"), "Live Run — press F2 to run").add_class("panel"),
