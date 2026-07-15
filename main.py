@@ -385,6 +385,11 @@ Examples:
         help="Run on the configured daily schedule (SCHEDULE_TIME in .env)",
     )
     parser.add_argument(
+        "--tui",
+        action="store_true",
+        help="Launch the interactive terminal UI (requires: uv sync --extra tui)",
+    )
+    parser.add_argument(
         "--revoke-cert",
         nargs="+",
         metavar="DOMAIN",
@@ -449,6 +454,7 @@ Examples:
         return (
             parsed_args.once
             or parsed_args.schedule
+            or parsed_args.tui
             or parsed_args.revoke_cert
             or parsed_args.expiring_in_30_days
             or bool(parsed_args.domain_status)
@@ -495,7 +501,20 @@ Examples:
     def cmd_schedule() -> None:
         """Handler: run on a recurring daily schedule."""
         run_scheduled(domains=args.domains, use_checkpoint=args.checkpoint)
-    
+
+    def cmd_tui() -> None:
+        """Handler: launch the interactive terminal UI."""
+        try:
+            from tui.app import AcmeTuiApp
+        except ImportError as exc:
+            log.error(
+                "The TUI requires the 'tui' extra. Install it with: "
+                "uv sync --extra tui (%s)",
+                exc,
+            )
+            sys.exit(1)
+        AcmeTuiApp().run()
+
     # ── Registry: maps CLI action to handler function ────────────────────────
     command_registry: dict[str, tuple[bool, Callable[[], None]]] = {
         "domain_status": (bool(args.domain_status), cmd_domain_status),
@@ -504,6 +523,7 @@ Examples:
         "revoke_cert": (bool(args.revoke_cert), cmd_revoke_cert),
         "once": (args.once, cmd_once),
         "schedule": (args.schedule, cmd_schedule),
+        "tui": (args.tui, cmd_tui),
     }
     
     # ── Execute first matching command ────────────────────────────────────────

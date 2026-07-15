@@ -48,6 +48,19 @@ python mcp_server.py
 
 Non-technical users running this repo in Claude Code can instead say "enroll a certificate for my domain" to invoke the guided `enroll-cert` skill (`.claude/skills/enroll-cert/`), which collects the needed inputs in plain English and diagnoses challenge failures (DNS/HTTP checks) automatically.
 
+## Terminal UI
+
+```bash
+uv sync --extra tui
+python main.py --tui
+```
+
+A live dashboard over the same CLI: a Home screen with the active config, a
+Domain Status screen (expiry countdown per managed domain), and Run/Revoke
+screens that launch `main.py --once`/`--revoke-cert` as a subprocess and
+stream its output live, with automatic plain-English diagnosis (DNS/HTTP
+checks, same logic as the `enroll-cert` skill) if a run fails.
+
 ## License
 
 This project is licensed under the MIT License – see the [LICENSE](LICENSE) file for details.

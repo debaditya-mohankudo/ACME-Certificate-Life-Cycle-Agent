@@ -379,3 +379,37 @@ def test_generate_test_cert_rejects_invalid_days(monkeypatch, tmp_path):
         config.settings = original_settings
 
 
+def test_cli_tui_dispatches_to_tui_command(monkeypatch):
+    called = []
+    monkeypatch.setattr(main, "apply_runtime_settings_overrides", lambda **_: None)
+    monkeypatch.setattr(sys, "argv", ["main.py", "--tui"])
+
+    class _FakeApp:
+        def run(self):
+            called.append(True)
+
+    # Patch the import site inside cmd_tui, not a module-level main.AcmeTuiApp
+    # (there is none — the import is intentionally lazy so main.py doesn't
+    # require the optional `tui` extra to be installed for non-TUI usage).
+    import types
+
+    fake_tui_app_module = types.ModuleType("tui.app")
+    fake_tui_app_module.AcmeTuiApp = _FakeApp
+    monkeypatch.setitem(sys.modules, "tui.app", fake_tui_app_module)
+
+    main.main()
+
+    assert called == [True]
+
+
+def test_cli_tui_missing_extra_exits_cleanly(monkeypatch):
+    monkeypatch.setattr(main, "apply_runtime_settings_overrides", lambda **_: None)
+    monkeypatch.setattr(sys, "argv", ["main.py", "--tui"])
+    monkeypatch.delitem(sys.modules, "tui.app", raising=False)
+    monkeypatch.setitem(sys.modules, "tui.app", None)  # forces ImportError on `from tui.app import ...`
+
+    with pytest.raises(SystemExit) as exc:
+        main.main()
+    assert exc.value.code == 1
+
+
