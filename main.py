@@ -264,6 +264,7 @@ def get_domain_statuses(
                     "expires_at": None,
                     "days_until_expiry": None,
                     "expired": None,
+                    "issuer": None,
                 }
             )
             continue
@@ -278,6 +279,13 @@ def get_domain_statuses(
             else:
                 status = "valid"
 
+            try:
+                issuer = fs.parse_issuer(pem)
+            except Exception:
+                # Issuer is display-only — an unparseable issuer field must
+                # not fail a status lookup that otherwise succeeded.
+                issuer = None
+
             statuses.append(
                 {
                     "domain": domain,
@@ -286,6 +294,7 @@ def get_domain_statuses(
                     "expires_at": expiry.isoformat(),
                     "days_until_expiry": days_until_expiry,
                     "expired": days_until_expiry < 0,
+                    "issuer": issuer,
                 }
             )
         except Exception as exc:
@@ -297,6 +306,7 @@ def get_domain_statuses(
                     "expires_at": None,
                     "days_until_expiry": None,
                     "expired": None,
+                    "issuer": None,
                 }
             )
             log.warning("Failed to parse cert expiry for %s: %s", domain, exc)

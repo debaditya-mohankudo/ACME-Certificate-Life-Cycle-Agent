@@ -130,6 +130,7 @@ def test_get_domain_statuses_classifies_domains(monkeypatch):
             "storage.filesystem.days_until_expiry",
             lambda expiry: days_by_expiry[expiry],
         )
+        monkeypatch.setattr("storage.filesystem.parse_issuer", lambda pem: f"issuer-for-{pem}")
 
         statuses = main.get_domain_statuses(
             ["missing.example.com", "expired.example.com", "soon.example.com", "ok.example.com"]
@@ -137,6 +138,9 @@ def test_get_domain_statuses_classifies_domains(monkeypatch):
 
         assert statuses[0]["status"] == "missing"
         assert statuses[0]["cert_found"] is False
+        assert statuses[0]["issuer"] is None
+
+        assert statuses[1]["issuer"] == "issuer-for-pem_expired"
 
         assert statuses[1]["status"] == "expired"
         assert statuses[1]["expired"] is True

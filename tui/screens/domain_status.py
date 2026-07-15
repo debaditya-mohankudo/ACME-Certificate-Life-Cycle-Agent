@@ -45,7 +45,7 @@ class DomainStatusScreen(Screen):
     def on_mount(self) -> None:
         log_ui("screen_shown", screen="DomainStatusScreen")
         table = self.query_one("#domain-table", DataTable)
-        table.add_columns("Domain", "Status", "Expires", "Days Left")
+        table.add_columns("Domain", "Status", "Expires", "Days Left", "Issuer")
         self._refresh()
 
     def on_screen_resume(self) -> None:
@@ -79,4 +79,5 @@ class DomainStatusScreen(Screen):
                 status_text,
                 row.get("expires_at") or "-",
                 str(days_left) if days_left is not None else "-",
+                row.get("issuer") or "-",
             )

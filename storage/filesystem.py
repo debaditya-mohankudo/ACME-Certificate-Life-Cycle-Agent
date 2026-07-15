@@ -22,6 +22,7 @@ from typing import Optional
 
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
+from cryptography.x509.oid import NameOID
 
 from storage.atomic import atomic_write_text, atomic_write_bytes
 
@@ -77,6 +78,17 @@ def parse_expiry(pem_text: str) -> datetime:
     except AttributeError:
         # Older cryptography: naive datetime — attach UTC
         return cert.not_valid_after.replace(tzinfo=timezone.utc)
+
+
+def parse_issuer(pem_text: str) -> str:
+    """Parse the issuer CommonName from a PEM certificate for display
+    purposes (e.g. "R11", "Pebble Intermediate CA"). Falls back to the full
+    RFC 4514 issuer string when the issuer has no CN attribute."""
+    cert = x509.load_pem_x509_certificate(pem_text.encode(), default_backend())
+    cn_attrs = cert.issuer.get_attributes_for_oid(NameOID.COMMON_NAME)
+    if cn_attrs:
+        return str(cn_attrs[0].value)
+    return cert.issuer.rfc4514_string()
 
 
 def days_until_expiry(expiry: datetime) -> int:
