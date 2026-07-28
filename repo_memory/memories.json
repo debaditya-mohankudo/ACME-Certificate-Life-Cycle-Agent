@@ -1,0 +1,79 @@
+{
+  "memories": {
+    "acme-arch": {
+      "body": "## ACME Certificate Lifecycle Agent — Architecture\n\n**Repo:** `~/workspace/ACME_Cert_Life_Cycle_Agent_By_Claude_Cowork`\n\n### Core model\nDeterministic LangGraph `StateGraph` orchestrating a stateless ACME RFC 8555 client. No LLM in the pipeline — fully removed as of 2026-06-13 (commit 829ad37).\n\n### State\n- All workflow state in `AgentState` (TypedDict, `agent/state.py`)\n- Account private key never enters state — stays on disk at `ACCOUNT_KEY_PATH`\n- `current_nonce` flows through state; one nonce consumed per ACME POST\n- CSR stored as hex string in order dict\n\n### Graph topology (renewal)\n```\nscanner → planner → pick_next_domain → account → order → challenge → csr → finalizer → download → storage → reporter\n                          ↑                                                                              ↓\n                    error_handler ← retry_scheduler ←───────────────────────────────────────── (on error)\n```\n- `pick_next_domain`: routes to `account` (next domain) or `reporter` (done)\n- `error_handler`: classifies errors; fatal ACME errors (unauthorized, accountDoesNotExist, badKey, externalAccountRequired) → abort all; retriable → exponential backoff (cap 300s, max 3 retries)\n- Revocation has a separate graph: `agent/revocation_graph.py`\n\n### Key nodes (`agent/nodes/`)\n| Node | File | Responsibility |\n|---|---|---|\n| planner | `planner.py` | Deterministic renewal plan: no-cert domains first, then by expiry asc |\n| scanner | `scanner.py` | Reads cert store, computes days_until_expiry |\n| account | `account.py` | Register or look up ACME account (EAB if required) |\n| order | `order.py` | POST new-order |\n| challenge | `challenge.py` | HTTP-01 (standalone/webroot) or DNS-01 (Cloudflare/Route53/GCloud) |\n| csr | `csr.py` | Generate CSR, stored as hex in state |\n| finalizer | `finalizer.py` | POST finalize, poll for cert ready |\n| storage | `storage.py` | Atomic writes: cert.pem, chain.pem, fullchain.pem, privkey.pem (0o600), metadata.json |\n| reporter | `reporter.py` | Deterministic text summary, no LLM |\n| error_handler | `error_handler.py` | Classifies errors, sets action: retry/skip/abort |\n| retry_scheduler | `retry_scheduler.py` | Applies backoff delay |\n| revoker | `revoker.py` | ACME revocation POST |\n\n### ACME client (`acme/`)\n- `client.py` — stateless ACME client; every network call is a named method\n- `jws.py` — JWS signing (RS256), nonce management\n- `crypto.py` — key generation, CSR building\n- `http_challenge.py` — HTTP-01 challenge server / webroot writer\n- `dns_challenge.py` — DNS-01 provider abstraction\n- `ca_detection.py` — CA detection from X.509 issuer fields\n\n### Supported CAs\n`digicert | letsencrypt | letsencrypt_staging | zerossl | sectigo | custom`\nDigiCert, ZeroSSL, Sectigo require EAB (RFC 8739).\n\n### Challenge modes (`HTTP_CHALLENGE_MODE`)\n`standalone` — built-in HTTP server port 80\n`webroot` — writes token to existing web root\n`dns` — DNS-01 via Cloudflare, Route53, or Google Cloud DNS\n\n### Hard invariants (never break)\n1. One ACME POST → exactly one nonce consumed\n2. No concurrent ACME operations (sequential by design)\n3. No private keys in AgentState\n4. Planner never introduces new domains\n5. Retry logic only in error_handler + retry_scheduler\n6. Certificate writes are atomic\n7. No LLM in the pipeline\n\n### Tests\n- 509 unit tests (run: `pytest -v -n auto -m \"not integration\"`)\n- 9 Pebble integration tests (require Docker: `docker compose -f docker-compose.pebble.yml up -d`)\n- Fixtures: `pebble_settings` (settings singleton mutation), `dns_settings` (extends pebble_settings for DNS-01)\n\n### Config\n`config.py` — Pydantic settings, loaded from `.env`. Key fields: `CA_PROVIDER`, `MANAGED_DOMAINS`, `CERT_STORE_PATH`, `ACCOUNT_KEY_PATH`, `HTTP_CHALLENGE_MODE`, `MAX_RETRIES`, `RENEWAL_THRESHOLD_DAYS`. Never use `pip` — always `uv sync`.",
+      "created_at": "2026-07-28T03:15:41.882941+00:00",
+      "files": "",
+      "last_validated": "2026-07-28T03:15:41.882941+00:00",
+      "name": "acme-arch",
+      "related": "",
+      "tags": "acme, langgraph, rfc8555, architecture, statemachine, certificate, renewal, deterministic",
+      "type": "project"
+    },
+    "acme-goal": {
+      "body": "## ACME Cert Lifecycle Agent — Goal\n\nRFC-driven TLS certificate lifecycle automation via ACME (RFC 8555).\n\n**Key target:** 29-day certificate renewal cadence, aligned with anticipated CA/Browser Forum maximum certificate lifetime reduction to 29 days in 2029.\n\n**Why:** Industry direction (Apple/Google ballot) is pushing max cert lifetimes down — 90 days (Let's Encrypt today) → 47 days (2026) → 29 days (2029). This agent must handle high-frequency automated renewal reliably at that cadence without human intervention.\n\n**How to apply:** Any feature or architectural decision should be evaluated against this constraint — renewal pipeline must be fast, deterministic, and zero-touch at 29-day frequency.",
+      "created_at": "2026-07-28T03:14:54.166303+00:00",
+      "files": "",
+      "last_validated": "2026-07-28T03:14:54.166303+00:00",
+      "name": "acme-goal",
+      "related": "",
+      "tags": "acme, rfc8555, goal, renewal, 2029, certificate-lifetime",
+      "type": "project"
+    },
+    "config-factory-split-over-coercion": {
+      "body": "When two operating modes of a config are truly mutually exclusive (e.g. CERT_ISSUANCE_MODE=acme|spiffe), prefer splitting into two separate config classes dispatched by a factory over a single flat class with a coerce-and-log validator that zeroes out the inactive mode's fields.\n\nWhy: coercion still constructs one object carrying both modes' fields (just some defaulted) — callers can still accidentally read/rely on a field that \"shouldn't\" be set for the active mode, and `self` inside any validator has a misleadingly broad type. A factory that returns a true union type (only one concrete class ever instantiated) makes the inactive mode's fields literally not exist (AttributeError, not a silently-defaulted value), and gives every downstream reader/validator a narrower, more honest type.\n\nHow to apply: when asked to prevent \"one config depending on another,\" don't default to a coerce-on-validate fix — ask/consider whether a full class split + factory (mirroring existing registry/dispatch patterns already in the codebase, e.g. a `_client_registry`-style dict) better matches the intent of true mutual exclusivity. Shared code paths (e.g. graph nodes used by both graphs) must then read mode-specific fields via `getattr(obj, field, default)` rather than assuming presence.",
+      "created_at": "2026-07-28T03:15:23.600658+00:00",
+      "files": "",
+      "last_validated": "2026-07-28T03:15:23.600658+00:00",
+      "name": "config-factory-split-over-coercion",
+      "related": "",
+      "tags": "config validation, mutually exclusive modes, factory pattern, pydantic settings, one class instantiated, coerce vs split, task:63eee5d7",
+      "type": "project"
+    },
+    "docker-compose-run-recreates-depends-on-services": {
+      "body": "`docker compose run <service>` reconciles that service's `depends_on` list before running — if a dependency's desired state differs even slightly (e.g. an env var wasn't re-supplied for this invocation), compose recreates it. This is dangerous for any dependency with single-use bootstrap state (e.g. a SPIRE join token, consumed on first successful attestation) — recreating the agent after that mints no new token and it crashes. Why: `docker compose run` isn't a read-only invocation of the target service; it re-evaluates the whole dependency graph like `up` would. How to apply: use `docker compose run --rm --no-deps <service>` when the dependencies are already running and should not be touched, especially for anything with single-use credentials/tokens.",
+      "created_at": "2026-07-28T03:15:49.114292+00:00",
+      "files": "",
+      "last_validated": "2026-07-28T03:15:49.114292+00:00",
+      "name": "docker-compose-run-recreates-depends-on-services",
+      "related": "",
+      "tags": "docker compose run, depends_on, no-deps, service recreate, single-use token, join token, task:bba501f2",
+      "type": "project"
+    },
+    "docker-desktop-macos-no-bind-mount-unix-socket-proxy": {
+      "body": "Docker Desktop for macOS does not proxy bind-mounted Unix domain sockets from a container to the host — the socket file shows up on the host filesystem (via the VM's virtiofs/osxfs layer) but a host process connecting to it gets ECONNREFUSED. Only Docker's own docker.sock gets special-cased forwarding; this is not general Unix-socket bind-mount support. Why: this differs from native Linux Docker, where bind-mounted sockets work natively via the shared kernel — easy to design a test harness assuming Linux semantics and have it silently fail on Mac. How to apply: any local test harness needing a container's Unix socket reachable elsewhere must share it via a named Docker volume and run the connecting code inside another container (not the host), or document the Linux-only bind-mount path as a known platform gap.",
+      "created_at": "2026-07-28T03:15:45.828711+00:00",
+      "files": "",
+      "last_validated": "2026-07-28T03:15:45.828711+00:00",
+      "name": "docker-desktop-macos-no-bind-mount-unix-socket-proxy",
+      "related": "",
+      "tags": "docker desktop macos, unix domain socket, bind mount, econnrefused, workload api, spire, spiffe, cross-platform docker, task:bba501f2",
+      "type": "project"
+    },
+    "github-acme-cert-agent": {
+      "body": "GitHub project: ACME Certificate Lifecycle Agent built with Claude Code — https://github.com/debaditya-mohankudo/ACME_Cert_Life_Cycle_Agent_By_Claude_Cowork\n\nReference this repo when discussing certificate management, ACME protocol, or Claude Code project work.",
+      "created_at": "2026-07-28T03:14:51.214351+00:00",
+      "files": "",
+      "last_validated": "2026-07-28T03:14:51.214351+00:00",
+      "name": "github-acme-cert-agent",
+      "related": "",
+      "tags": "github, acme, certificate, tls, ssl, project",
+      "type": "reference"
+    },
+    "pydantic-settings-reload-singleton-pollution": {
+      "body": "A test that does `monkeypatch.setenv(...)` then `importlib.reload(config)` to re-trigger config construction permanently mutates the module-level settings singleton for the rest of the pytest process, not just that test file — later tests elsewhere in the suite silently inherit the wrong config state.\n\nWhy: pytest runs all test files in one process; reloading a module re-executes its top-level code (including `settings = make_settings()`), replacing the object every importer already holds a reference to. This is invisible when running the affected test file in isolation (passes fine) and only surfaces as failures in unrelated files when run as part of the full suite — makes it look like flaky/unrelated breakage.\n\nHow to apply: whenever a test does `importlib.reload()` on a module holding a live config/settings singleton, add an autouse teardown fixture in that same test file that reloads the module back to its default state after each test. Don't assume module reload side effects are test-scoped — verify by running the full suite, not just the changed file, before considering a refactor done.",
+      "created_at": "2026-07-28T03:15:53.245408+00:00",
+      "files": "",
+      "last_validated": "2026-07-28T03:15:53.245408+00:00",
+      "name": "pydantic-settings-reload-singleton-pollution",
+      "related": "",
+      "tags": "pydantic-settings, importlib reload, module singleton, test pollution, monkeypatch setenv, config reload, cross-test contamination, task:63eee5d7",
+      "type": "project"
+    }
+  },
+  "meta": {
+    "commit": "",
+    "extracted_at": "",
+    "note": ""
+  }
+}
