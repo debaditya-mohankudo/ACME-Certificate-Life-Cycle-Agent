@@ -6,13 +6,11 @@ on:
     paths-ignore:
       - '**/*.md'
       - 'doc/**'
-      - '.history'
   pull_request:
     branches: [main]
     paths-ignore:
       - '**/*.md'
       - 'doc/**'
-      - '.history'
 
 jobs:
   test:

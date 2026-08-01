@@ -30,7 +30,6 @@ Trigger: every push and PR targeting `main`, **except when only documentation fi
 Paths ignored (workflow skipped entirely if all changed files match):
 - `**/*.md` — any Markdown file
 - `doc/**` — everything under `doc/`
-- `.history` — architectural intent log
 
 Runner: `ubuntu-latest` (no container — Docker image pull eliminated).
 Python: `actions/setup-python@v5` with `python-version: '3.12'`; resolved from
