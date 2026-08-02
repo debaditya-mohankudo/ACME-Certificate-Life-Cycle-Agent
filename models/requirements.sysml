@@ -9,18 +9,29 @@ package Requirements {
          *
          * ALLOCATION: one satisfier per requirement. A requirement needing two
          * parts means a rule and the data it governs have drifted apart, and
-         * the honest response is to record it rather than to split the wording
-         * until it looks clean. See DUPLICATED RULE below for the one place
-         * this model came close.
+         * the honest response is to record that rather than to split the
+         * wording until it looks clean. No requirement below needed it.
          *
-         * DUPLICATED RULE, recorded rather than hidden: temporarily overriding
-         * the settings singleton is implemented twice — once in main.py for
-         * CLI flag overrides, once in mcp_server.py as a context manager that
-         * restores on exception. Both live inside ControlSurfaces, so the
-         * allocation below is legitimately single, but they are two
-         * independent implementations of one rule and only the MCP one is
-         * exception-safe. Worth consolidating; flagged here so the next reader
-         * does not assume the CLI path has the same guarantee.
+         * ONE BUILDER, TWO LIFETIMES — corrected from an earlier revision of
+         * this file, which called the settings override a duplicated rule with
+         * only one exception-safe copy. That was wrong, and the correction is
+         * kept visible because the claim was committed and someone may have
+         * read it.
+         *
+         * Construction is already shared: mcp_server.py imports
+         * build_settings_from_override from main.py, so there is one
+         * implementation of how an override is built. Only the application
+         * differs, and it differs because the lifetimes do. The CLI replaces
+         * the settings singleton once at startup and never restores it — the
+         * process exits afterwards, so there is nothing to restore to and no
+         * later caller to protect. The MCP server restores in a finally
+         * because it is long-lived and serves many calls, where one call's
+         * configuration leaking into the next would be a real defect.
+         *
+         * Two correct answers to different questions, not one rule
+         * implemented twice. The lesson worth keeping: "the same thing is
+         * done differently in two places" is a hypothesis, and the cheap test
+         * is whether the two places have the same lifetime.
          *
          * DELIBERATELY ABSENT: no requirement constrains throughput, latency,
          * or concurrency-as-a-goal. Sequential processing is a commitment this
