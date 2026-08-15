@@ -219,6 +219,13 @@ class AcmeConfig(_BaseAppSettings):
     ACME_CA_BUNDLE: str = ""       # Path to CA cert bundle; empty = system default
     ACME_INSECURE: bool = False    # Skip TLS verification (never use in production)
 
+    # ── Experimental PQC domain key (test-CA only) ─────────────────────────
+    # No public DV CA accepts an ML-DSA-signed CSR via ACME yet. This flag only
+    # unlocks acme.crypto.generate_mldsa_key() for exercising CSR generation
+    # against a PQC-capable test CA (e.g. a patched Pebble); it must never be
+    # set true against a production ACME_DIRECTORY_URL / CA_PROVIDER.
+    EXPERIMENTAL_MLDSA_DOMAIN_KEY: bool = False
+
     @field_validator("MANAGED_DOMAINS", mode="before")
     @classmethod
     def parse_domains(cls, v: object) -> List[str]:

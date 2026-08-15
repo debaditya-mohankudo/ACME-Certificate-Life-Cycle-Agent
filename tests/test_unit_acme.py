@@ -14,7 +14,7 @@ import pytest
 import responses as resp_lib
 
 from acme import jws as jwslib
-from acme.crypto import create_csr, generate_rsa_key, private_key_to_pem, generate_ec_key
+from acme.crypto import create_csr, generate_rsa_key, private_key_to_pem, generate_ec_key, generate_mldsa_key
 from acme.client import (
     AcmeError,
     AcmeClient,
@@ -332,6 +332,47 @@ def test_private_key_to_pem_ec():
     key = generate_ec_key("secp256r1")
     pem = private_key_to_pem(key)
     assert pem.startswith("-----BEGIN EC PRIVATE KEY-----")
+
+
+# ─── acme/crypto.py — experimental ML-DSA (PQC, test-CA only) ────────────────
+
+def test_generate_mldsa_key_supported_levels():
+    from cryptography.hazmat.primitives.asymmetric import mldsa
+    expected = {
+        "mldsa44": mldsa.MLDSA44PrivateKey,
+        "mldsa65": mldsa.MLDSA65PrivateKey,
+        "mldsa87": mldsa.MLDSA87PrivateKey,
+    }
+    for level, key_cls in expected.items():
+        key = generate_mldsa_key(level)
+        assert isinstance(key, key_cls)
+
+
+def test_generate_mldsa_key_default_level_is_mldsa65():
+    from cryptography.hazmat.primitives.asymmetric import mldsa
+    key = generate_mldsa_key()
+    assert isinstance(key, mldsa.MLDSA65PrivateKey)
+
+
+def test_generate_mldsa_key_invalid_level():
+    with pytest.raises(ValueError) as exc:
+        generate_mldsa_key("mldsa999")
+    assert "Unsupported ML-DSA level" in str(exc.value)
+
+
+def test_private_key_to_pem_mldsa():
+    key = generate_mldsa_key()
+    pem = private_key_to_pem(key)
+    assert pem.startswith("-----BEGIN PRIVATE KEY-----")  # PKCS8, not PKCS1
+
+
+def test_create_csr_mldsa_single_domain():
+    key = generate_mldsa_key()
+    csr_der = create_csr(key, "example.com")
+    csr = x509.load_der_x509_csr(csr_der)
+    assert csr.is_signature_valid
+    san = csr.extensions.get_extension_for_class(x509.SubjectAlternativeName)
+    assert [d.value for d in san.value] == ["example.com"]
 
 
 # ─── acme/client.py ───────────────────────────────────────────────────────────

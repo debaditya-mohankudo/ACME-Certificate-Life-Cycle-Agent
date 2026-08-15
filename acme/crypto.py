@@ -8,8 +8,14 @@ from __future__ import annotations
 
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import ec, rsa
+from cryptography.hazmat.primitives.asymmetric import ec, mldsa, rsa
 from cryptography.x509.oid import NameOID
+
+_MLDSA_LEVELS: dict[str, type] = {
+    "mldsa44": mldsa.MLDSA44PrivateKey,
+    "mldsa65": mldsa.MLDSA65PrivateKey,
+    "mldsa87": mldsa.MLDSA87PrivateKey,
+}
 
 
 def generate_rsa_key(key_size: int = 2048) -> rsa.RSAPrivateKey:
@@ -42,17 +48,41 @@ def generate_ec_key(curve_name: str = "secp256r1") -> ec.EllipticCurvePrivateKey
     return ec.generate_private_key(curve, default_backend())
 
 
-def private_key_to_pem(key: rsa.RSAPrivateKey | ec.EllipticCurvePrivateKey) -> str:
+def generate_mldsa_key(level: str = "mldsa65"):
+    """
+    Generate an ML-DSA (FIPS 204) private key for experimental PQC use.
+
+    EXPERIMENTAL — test-CA only. No public DV CA accepts an ML-DSA-signed CSR
+    via ACME as of this writing; this exists to exercise CSR generation
+    against a PQC-capable test CA, never a production ACME_DIRECTORY_URL.
+    Gated by config.EXPERIMENTAL_MLDSA_DOMAIN_KEY; callers are responsible
+    for checking that flag before invoking this.
+    """
+    key_cls = _MLDSA_LEVELS.get(level.lower())
+    if key_cls is None:
+        raise ValueError(
+            f"Unsupported ML-DSA level: {level}. Supported: {', '.join(_MLDSA_LEVELS)}"
+        )
+    return key_cls.generate()
+
+
+def private_key_to_pem(key) -> str:
     """Serialize a private key to an unencrypted PEM string."""
+    # ML-DSA keys don't support the legacy TraditionalOpenSSL (PKCS#1) format.
+    key_format = (
+        serialization.PrivateFormat.PKCS8
+        if isinstance(key, tuple(_MLDSA_LEVELS.values()))
+        else serialization.PrivateFormat.TraditionalOpenSSL
+    )
     return key.private_bytes(
         encoding=serialization.Encoding.PEM,
-        format=serialization.PrivateFormat.TraditionalOpenSSL,
+        format=key_format,
         encryption_algorithm=serialization.NoEncryption(),
     ).decode()
 
 
 def create_csr(
-    private_key: rsa.RSAPrivateKey | ec.EllipticCurvePrivateKey,
+    private_key,
     domain: str,
     san_domains: list[str] | None = None,
 ) -> bytes:
@@ -81,5 +111,8 @@ def create_csr(
         )
     )
 
-    csr = builder.sign(private_key, hashes.SHA256())
+    # ML-DSA is a pure signature scheme with no external pre-hash; cryptography
+    # requires algorithm=None for it, versus SHA256 for RSA/EC.
+    algorithm = None if isinstance(private_key, tuple(_MLDSA_LEVELS.values())) else hashes.SHA256()
+    csr = builder.sign(private_key, algorithm)
     return csr.public_bytes(serialization.Encoding.DER)
