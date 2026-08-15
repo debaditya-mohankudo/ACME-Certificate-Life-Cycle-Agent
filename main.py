@@ -34,6 +34,27 @@ CA_PROVIDER_CHOICES = [
 ]
 
 
+def suppress_core_dumps() -> None:
+    """Disable core dumps for this process.
+
+    Domain private keys are generated and held in memory for the life of the
+    process. A crash without this would let the OS write a core dump to disk
+    containing that key material — a separate exposure path from a read bug
+    like Heartbleed, and one fully within this codebase's control to close.
+    Not available on Windows (no `resource` module); a no-op there is
+    preferable to failing the whole process over a defense-in-depth measure.
+    """
+    try:
+        import resource
+    except ImportError:
+        return
+
+    try:
+        resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
+    except (ValueError, OSError) as exc:
+        log.warning("Could not disable core dumps: %s", exc)
+
+
 # ── Agent runner ──────────────────────────────────────────────────────────────
 
 
@@ -369,6 +390,8 @@ def apply_runtime_settings_overrides(
 
 
 def main() -> None:
+    suppress_core_dumps()
+
     parser = argparse.ArgumentParser(
         description="ACME Certificate Lifecycle Agent",
         formatter_class=argparse.RawDescriptionHelpFormatter,

@@ -9,6 +9,20 @@ import config
 import main
 
 
+def test_suppress_core_dumps_sets_rlimit_core_to_zero():
+    resource = pytest.importorskip("resource")
+
+    # setrlimit(0, 0) lowers the hard limit too, which cannot be raised back
+    # without privilege — so there is no restorable prior state to save here.
+    main.suppress_core_dumps()
+    assert resource.getrlimit(resource.RLIMIT_CORE) == (0, 0)
+
+
+def test_suppress_core_dumps_no_resource_module_is_noop(monkeypatch):
+    monkeypatch.setitem(sys.modules, "resource", None)
+    main.suppress_core_dumps()  # must not raise
+
+
 def test_apply_runtime_settings_overrides_custom(monkeypatch):
     original_settings = config.settings
     monkeypatch.setenv("CA_PROVIDER", "digicert")
