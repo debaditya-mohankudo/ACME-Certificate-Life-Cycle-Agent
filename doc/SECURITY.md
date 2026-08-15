@@ -25,7 +25,7 @@ where in the code it lives, and what threat it addresses.
 
 ## Retrieval keywords
 
-`security`, `private key`, `account key isolation`, `atomic writes`, `tls verification`, `ACME_INSECURE`, `credential handling`, `file permissions`, `container hardening`, `network exposure`, `retry safety`, `mcp security`
+`security`, `private key`, `account key isolation`, `atomic writes`, `tls verification`, `ACME_INSECURE`, `credential handling`, `file permissions`, `container hardening`, `network exposure`, `retry safety`, `mcp security`, `core dump`, `RLIMIT_CORE`, `crash-time key exposure`
 [negative keywords / not-this-doc]
 async, concurrency, parallel, checkpoint, nonce, stateful, planner, LLM, CI, MCP, revoke, configuration, storage, atomic, filesystem, docker, container, test, coverage, audit, performance, optimization, operator
 
@@ -117,6 +117,46 @@ order["csr_hex"] = csr_bytes.hex()   # private key stays in local scope
 ```
 
 CSR signing uses **SHA-256** with the domain's RSA private key.
+
+### Core dump suppression — crash-time key exposure
+
+Domain and account private keys are held in process memory for the life of the
+run. Absent any mitigation, a process crash (segfault, `abort()`, `SIGQUIT`) can
+cause the OS to write a core dump containing that in-memory key material to disk
+— a persistent, readable artifact with no expiry, distinct from a runtime read
+bug like Heartbleed and fully within this codebase's control to close.
+
+[main.py](../main.py) disables core dumps for its own process at the very start
+of `main()`, before argument parsing and before any lazy import that could
+generate key material:
+
+```python
+# main.py
+def suppress_core_dumps() -> None:
+    try:
+        import resource
+    except ImportError:
+        return  # not available on Windows; no-op rather than fail the process
+    try:
+        resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
+    except (ValueError, OSError) as exc:
+        log.warning("Could not disable core dumps: %s", exc)
+```
+
+This covers every CLI subcommand (`--once`, `--schedule`, `--revoke-cert`,
+`--generate-test-cert`, `--tui`) since it runs once at process startup rather
+than per-subcommand. It fails open (logs a warning, continues) rather than
+crashing the CLI if the host's hard limit cannot be lowered — consistent with
+[§13](#13-known-constraints-and-hardening-recommendations)'s general posture of
+defense-in-depth controls that degrade gracefully rather than block operation.
+
+**mcp_server.py is a separate long-lived process** with its own startup path and
+does not yet call this helper — tracked as a follow-up (task:62845f14, not yet
+implemented as of this writing).
+
+**Threat addressed:** Post-crash forensic exposure of private key material via
+an on-disk core dump, e.g. from an unhandled exception, OOM kill, or signal
+during a renewal run.
 
 ---
 
@@ -571,6 +611,7 @@ tracebacks to MCP clients.
 |---|---|---|
 | Account key never in state | Excluded from `AgentState`; only path is stored | [agent/state.py](../agent/state.py) |
 | Domain key never in state | Generated in-node local scope; only hex CSR in state | [agent/nodes/csr.py](../agent/nodes/csr.py) |
+| Core dump suppression | `RLIMIT_CORE=0` at process startup; fails open, no-op on Windows | [main.py](../main.py) |
 | Key file permissions | `os.chmod(path, 0o600)` after every write | [acme/jws.py](../acme/jws.py), [storage/filesystem.py](../storage/filesystem.py) |
 | TLS verification | Enabled by default; `ACME_INSECURE=false` | [acme/client.py](../acme/client.py), [config.py](../config.py) |
 | Nonce replay protection | Fresh nonce per request; `badNonce` retry logic | [acme/client.py](../acme/client.py), [acme/jws.py](../acme/jws.py) |

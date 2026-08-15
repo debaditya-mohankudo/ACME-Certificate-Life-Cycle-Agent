@@ -279,6 +279,32 @@
         "runtime-settings-override-singleton-swap"
       ]
     },
+    "core-dump-suppression-at-startup": {
+      "confidence": 0.85,
+      "contracts": [
+        "Covers every CLI subcommand (--once, --schedule, --revoke-cert, --generate-test-cert, --tui) via a single call at the top of main(), not per-subcommand"
+      ],
+      "created_at": "2026-08-15T15:46:09.148076+00:00",
+      "description": "suppress_core_dumps() sets RLIMIT_CORE=0 via the resource module at the very start of main(), before argument parsing and before any lazy import that could generate domain/account private key material, so a process crash cannot leave that key material in an on-disk core dump.",
+      "evidence": [
+        "main.py:37-55",
+        "main.py:373-375",
+        "tests/test_cli_overrides.py:12-24"
+      ],
+      "invariants": [
+        "suppress_core_dumps() runs before any code path that generates or loads private key material",
+        "Absence of the resource module (Windows) is a no-op, not a crash",
+        "A failed setrlimit call (ValueError/OSError) is logged and the process continues rather than exiting"
+      ],
+      "last_validated": "2026-08-15T15:46:09.148140+00:00",
+      "module": "main.py",
+      "name": "core-dump-suppression-at-startup",
+      "related": [
+        "account-key-not-in-state",
+        "domain-privkey-never-in-state",
+        "cli-command-registry-dispatch"
+      ]
+    },
     "csv-fallback-settings-source": {
       "confidence": 0.9,
       "contracts": [
@@ -773,6 +799,6 @@
     "extracted_at": "2026-07-04T03:55:16.785719+00:00",
     "last_reviewed": "2026-07-14T23:01:26.831965+00:00",
     "note": "validated at 537226e0c7be97d19517385e35523d0b6158c5c4; deep-corrected evidence for config.py/main.py/scanner.py/storage.py-derived concepts (drifted line ranges from AcmeConfig/SpiffeConfig split + CLI additions), fast-path bumped last_validated for concepts whose module had zero commits since prior extraction commit 4d79b09a1a0699e9807113c883511f6001034b73",
-    "updated_at": "2026-08-15T12:04:35.936460+00:00"
+    "updated_at": "2026-08-15T15:46:09.148258+00:00"
   }
 }
