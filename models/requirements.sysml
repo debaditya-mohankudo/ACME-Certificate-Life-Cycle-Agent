@@ -95,6 +95,28 @@ package Requirements {
     }
     satisfy requirement PrivateKeyNeverInWorkflowStateRequirement by system.renewalWorkflow;
 
+    requirement def CoreDumpSuppressionRequirement {
+        doc /* Source: main.py (suppress_core_dumps). Sets RLIMIT_CORE=0 at
+             * process startup, before argument parsing and before any lazy
+             * import that could generate key material, so a crash cannot
+             * leave private key material behind in an on-disk core dump —
+             * a persistent, readable artifact distinct from a runtime read
+             * bug like Heartbleed, and one within this codebase's control
+             * to close. No-op on platforms without the resource module
+             * (Windows); a failed setrlimit call is logged and the process
+             * continues rather than exiting, matching this project's
+             * general posture of hardening controls that degrade rather
+             * than block operation.
+             *
+             * As of this writing this is implemented for main.py's CLI
+             * entrypoint only; mcp_server.py, the other long-lived process
+             * under ControlSurfaces that also handles key material, does
+             * not yet call it (tracked separately). The satisfy relation
+             * below reflects the CLI-only implementation, not full
+             * ControlSurfaces coverage. */
+    }
+    satisfy requirement CoreDumpSuppressionRequirement by system.controlSurfaces;
+
     requirement def SequentialDomainProcessingRequirement {
         doc /* Source: agent/graph.py. Domains are processed one at a time
              * through a single loop, and no protocol operation overlaps
