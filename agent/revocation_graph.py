@@ -8,7 +8,7 @@ Topology:
     → cert_revoker                  [new node: POST /revokeCert]
     → revocation_loop_router
       ├─(next_domain)→ pick_next_revocation_domain  [loop]
-      └─(all_done)→   revocation_reporter           [LLM summary]
+      └─(all_done)→   revocation_reporter           [deterministic summary]
     → END
 
 No error_handler/retry in the revocation graph — failures are logged and

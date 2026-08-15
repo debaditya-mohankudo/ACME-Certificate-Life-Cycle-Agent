@@ -65,8 +65,7 @@ Capture stdout — logging is JSONL to stdout (see `logger.py`), one JSON
 object per line, so you can grep it for `"level": "ERROR"` or scan the final
 summary line from `agent/nodes/reporter.py`'s
 `_revocation_reporter_deterministic` (deterministic string formatting, not
-an LLM call — the `[LLM summary]` label in `agent/revocation_graph.py`'s
-module docstring is stale and does not reflect current code).
+an LLM call).
 
 ## 3. Report the outcome
 
