@@ -17,12 +17,16 @@ it never bypasses the LangGraph revocation subgraph
 (`agent/revocation_graph.py`) and never touches the ACME account key or
 certificate private key directly. It exists to (a) translate a
 non-technical reason into the correct RFC 5280 reason code, and (b) explain
-the outcome per domain — revocation here is **best-effort**: unlike the
-renewal graph, there is no `error_handler`/`retry_scheduler` in this
-subgraph. A failed domain is logged to `failed_revocations` and the loop
-moves on to the next domain unconditionally; it does not retry, skip-with-
-backoff, or abort the whole run. Make sure the user understands that before
-you run it.
+the outcome per domain — revocation here is **best-effort with bounded
+retry**: `cert_revoker` (`agent/nodes/revoker.py`) retries a domain, with
+the same backoff as the renewal graph, only when the ACME error looks
+transient (rate limiting, server-side 5xx, connection failure). Policy or
+protocol failures (`unauthorized`, `alreadyRevoked`, `malformed`, missing
+local cert file) are still fatal and unretried, and exhausting the
+per-domain retry budget still falls back to logging the domain to
+`failed_revocations` and moving on — it never retries forever and never
+aborts the whole run over one domain's failure. Make sure the user
+understands that before you run it.
 
 ## 1. Collect inputs (plain English, one question at a time)
 
@@ -85,10 +89,17 @@ summary / log:
     `CERT_STORE_PATH` for that domain — nothing to revoke from this agent's
     side; ask if they meant a different domain or if the cert was issued
     elsewhere.
-  - An ACME error from the CA (e.g. `alreadyRevoked`, `unauthorized`) →
-    explain in plain terms and note that — unlike renewal — this subgraph
-    will **not** retry it automatically; re-running step 2 for just that
-    domain is the only way to try again.
+  - An ACME error from the CA that's a policy/protocol rejection (e.g.
+    `alreadyRevoked`, `unauthorized`) → explain in plain terms; this subgraph
+    does **not** retry these — re-running step 2 for just that domain is the
+    only way to try again.
+  - An ACME error that looks transient (rate limiting, server-side 5xx,
+    connection failure) → the subgraph already retried it a bounded number
+    of times (`max_retries`, default `config.MAX_RETRIES`) with backoff
+    before giving up; landing in `failed_revocations` means the CA was
+    still unavailable/limiting after those retries — waiting a bit longer
+    before re-running step 2 is more likely to help than immediately
+    retrying again.
 - Since the subgraph doesn't abort on a per-domain failure, a mixed
   outcome (some revoked, some failed) in one run is normal — report each
   domain's result separately rather than treating the whole run as

@@ -85,6 +85,24 @@ def test_revocation_loop_router_no_targets():
     assert revocation_loop_router(state) == "all_done"
 
 
+def test_revocation_loop_router_retry_scheduled():
+    """Should return 'retry' when cert_revoker scheduled a retry, even if
+    other targets remain — the retry takes priority over advancing."""
+    state = {"revocation_targets": ["shop.example.com"], "retry_not_before": 9999999999.0}
+    assert revocation_loop_router(state) == "retry"
+
+
+def test_pick_next_revocation_domain_resets_retry_count():
+    """Moving to a new domain should reset the per-domain retry budget."""
+    state = {
+        "revocation_targets": ["example.com"],
+        "current_nonce": "nonce",
+        "retry_count": 2,
+    }
+    result = pick_next_revocation_domain(state)
+    assert result["retry_count"] == 0
+
+
 # ── cert_revoker tests ─────────────────────────────────────────────────────
 
 
@@ -190,6 +208,128 @@ def test_cert_revoker_acme_error(mock_make_client, mock_load_key, mock_read_cert
     assert result["current_revocation_domain"] is None
     assert len(result["error_log"]) == 1
     assert "Unauthorized" in result["error_log"][0]
+
+
+@patch("agent.nodes.revoker.fs.read_cert_pem")
+@patch("agent.nodes.revoker.jwslib.load_account_key")
+@patch("agent.nodes.revoker.make_client")
+def test_cert_revoker_retries_transient_error(mock_make_client, mock_load_key, mock_read_cert):
+    """A rateLimited/serverInternal-style error should schedule a retry for
+    the SAME domain rather than moving it to failed_revocations."""
+    mock_read_cert.return_value = "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----"
+    mock_load_key.return_value = MagicMock()
+
+    mock_client = MagicMock()
+    mock_make_client.return_value = mock_client
+    mock_client.get_directory.return_value = {"revokeCert": "https://ca.example.com/revokeCert"}
+
+    acme_error = AcmeError(
+        429, {"type": "urn:ietf:params:acme:error:rateLimited", "detail": "Too many requests"}, "new-nonce-1"
+    )
+    mock_client.revoke_certificate.side_effect = acme_error
+
+    state = {
+        "current_revocation_domain": "example.com",
+        "cert_store_path": "/tmp/certs",
+        "account_key_path": "/tmp/account.key",
+        "acme_account_url": "https://ca.example.com/account/12345",
+        "current_nonce": "nonce-456",
+        "revocation_reason": 0,
+        "revoked_domains": [],
+        "failed_revocations": [],
+        "error_log": [],
+        "retry_count": 0,
+        "retry_delay_seconds": 5,
+        "max_retries": 3,
+    }
+
+    result = cert_revoker(state)
+
+    assert "failed_revocations" not in result
+    assert "current_revocation_domain" not in result  # preserved by NOT being overwritten
+    assert result["retry_count"] == 1
+    assert result["retry_not_before"] is not None
+    assert result["retry_delay_seconds"] > 0
+
+
+@patch("agent.nodes.revoker.fs.read_cert_pem")
+@patch("agent.nodes.revoker.jwslib.load_account_key")
+@patch("agent.nodes.revoker.make_client")
+def test_cert_revoker_stops_retrying_after_max_retries(mock_make_client, mock_load_key, mock_read_cert):
+    """Once the per-domain retry budget is exhausted, a transient error
+    should fall back to today's best-effort failed_revocations behavior."""
+    mock_read_cert.return_value = "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----"
+    mock_load_key.return_value = MagicMock()
+
+    mock_client = MagicMock()
+    mock_make_client.return_value = mock_client
+    mock_client.get_directory.return_value = {"revokeCert": "https://ca.example.com/revokeCert"}
+
+    acme_error = AcmeError(
+        503, {"type": "urn:ietf:params:acme:error:serverInternal", "detail": "Try again"}, "new-nonce-2"
+    )
+    mock_client.revoke_certificate.side_effect = acme_error
+
+    state = {
+        "current_revocation_domain": "example.com",
+        "cert_store_path": "/tmp/certs",
+        "account_key_path": "/tmp/account.key",
+        "acme_account_url": "https://ca.example.com/account/12345",
+        "current_nonce": "nonce-456",
+        "revocation_reason": 0,
+        "revoked_domains": [],
+        "failed_revocations": [],
+        "error_log": [],
+        "retry_count": 3,
+        "retry_delay_seconds": 40,
+        "max_retries": 3,
+    }
+
+    result = cert_revoker(state)
+
+    assert result["failed_revocations"] == ["example.com"]
+    assert result["current_revocation_domain"] is None
+    assert result.get("retry_not_before") is None
+
+
+@patch("agent.nodes.revoker.fs.read_cert_pem")
+@patch("agent.nodes.revoker.jwslib.load_account_key")
+@patch("agent.nodes.revoker.make_client")
+def test_cert_revoker_does_not_retry_fatal_alreadyrevoked(mock_make_client, mock_load_key, mock_read_cert):
+    """alreadyRevoked/malformed-style errors are policy rejections, not
+    transient — they should fail immediately even with retry budget left."""
+    mock_read_cert.return_value = "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----"
+    mock_load_key.return_value = MagicMock()
+
+    mock_client = MagicMock()
+    mock_make_client.return_value = mock_client
+    mock_client.get_directory.return_value = {"revokeCert": "https://ca.example.com/revokeCert"}
+
+    acme_error = AcmeError(
+        400, {"type": "urn:ietf:params:acme:error:alreadyRevoked", "detail": "Certificate already revoked"}, "n"
+    )
+    mock_client.revoke_certificate.side_effect = acme_error
+
+    state = {
+        "current_revocation_domain": "example.com",
+        "cert_store_path": "/tmp/certs",
+        "account_key_path": "/tmp/account.key",
+        "acme_account_url": "https://ca.example.com/account/12345",
+        "current_nonce": "nonce-456",
+        "revocation_reason": 0,
+        "revoked_domains": [],
+        "failed_revocations": [],
+        "error_log": [],
+        "retry_count": 0,
+        "retry_delay_seconds": 5,
+        "max_retries": 3,
+    }
+
+    result = cert_revoker(state)
+
+    assert result["failed_revocations"] == ["example.com"]
+    assert result["current_revocation_domain"] is None
+    assert result.get("retry_not_before") is None
 
 
 # ── revocation_reporter tests ──────────────────────────────────────────────

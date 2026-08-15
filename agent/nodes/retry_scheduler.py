@@ -4,14 +4,22 @@ retry_scheduler node — apply scheduled backoff before retrying.
 This node checks if enough time has passed since error_handler scheduled a retry.
 If the scheduled time hasn't arrived yet, it waits (synchronously for now).
 
-Flow:
-  error_handler (LLM decides: retry/skip/abort)
-    → retry_scheduler (applies backoff) [NEW]
+Flow (renewal graph):
+  error_handler (deterministic: retry/skip/abort)
+    → retry_scheduler (applies backoff)
       → pick_next_domain (loop for retry)
 
+Flow (revocation graph, agent/revocation_graph.py):
+  cert_revoker (deterministic: retry/fail, classifies transient vs. fatal)
+    → retry_scheduler (applies backoff)
+      → cert_revoker (loop for retry, same domain)
+
+This node is generic — a pure function of retry_not_before/retry_delay —
+and is registered in both graphs rather than duplicated.
+
 Design rationale:
-  - Separates concerns: error decision (error_handler) vs. timing (retry_scheduler)
-  - Visible in graph traces (not hidden in error_handler)
+  - Separates concerns: error decision (error_handler/cert_revoker) vs. timing (retry_scheduler)
+  - Visible in graph traces (not hidden in the decision node)
   - Testable in isolation
   - Future: can be converted to async (await asyncio.sleep)
 

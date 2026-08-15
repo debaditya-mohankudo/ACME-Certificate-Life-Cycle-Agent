@@ -123,6 +123,7 @@ def run_revocation(
         reason=reason,
         cert_store_path=effective_settings.CERT_STORE_PATH,
         account_key_path=effective_settings.ACCOUNT_KEY_PATH,
+        max_retries=effective_settings.MAX_RETRIES,
     )
 
     config = {"configurable": {"thread_id": "revocation"}} if use_checkpoint else None

@@ -20,7 +20,9 @@ This document describes the certificate revocation feature added to the ACME Cer
 The feature provides:
 - On-demand certificate revocation via CLI (`--revoke-cert`)
 - RFC 5280 revocation reason codes (unspecified, keyCompromise, superseded, cessationOfOperation)
-- Best-effort domain looping (failures logged, loop continues)
+- Best-effort domain looping (failures logged, loop continues), with bounded
+  retry for transient failures on the current domain before it's logged
+  as failed
 - LLM-generated summary reports
 - Full checkpoint/resume support
 
@@ -73,26 +75,38 @@ START
   ▼
 [pick_next_revocation_domain] ◄──────────────┐
   │  Pop domain from revocation_targets      │
+  │  Reset per-domain retry_count            │
   │                                          │
   ▼                                          │
-[cert_revoker]                               │
+[cert_revoker] ◄────────────────┐            │
   │  POST /revokeCert for current domain     │
   │  (reads cert.pem from disk; fails        │
   │   gracefully if not found)               │
+  │  Classifies AcmeError: transient (retry) │
+  │  vs. policy/protocol (fatal)             │
   │                                          │
-  ▼                                          │
-[revocation_loop_router] ─ next_domain ──────┘
-  │
-  └── all_done ──► [revocation_reporter] ◄── LLM NODE
+  ▼                                │         │
+[revocation_loop_router]           │         │
+  ├── retry ──► [retry_scheduler] ─┘         │
+  ├── next_domain ────────────────────────────┘
+  └── all_done ──► [revocation_reporter]
                          │
                         END
 ```
+
+Retry is bounded per domain (`max_retries`, default `config.MAX_RETRIES`,
+same knob the renewal graph uses) and only fires for errors classified as
+transient — rate limiting, server-side 5xx, connection failures (see
+`agent/nodes/revoker.py`). Exhausting the budget, or hitting a
+policy/protocol error (unauthorized, alreadyRevoked, malformed, missing
+local cert file), falls back to the original best-effort behavior: log to
+`failed_revocations` and continue to the next domain.
 
 ### Key Differences from Renewal Graph
 
 | Aspect | Renewal | Revocation |
 |--------|---------|-----------|
-| Error handling | Retry with backoff | Log and continue |
+| Error handling | Retry with backoff (all non-fatal errors) | Retry with backoff (transient errors only), then log and continue |
 | Trigger | Scheduled daily | On-demand via CLI |
 | Scope | All managed domains | User-specified list |
 | LLM role | Planner + Reporter | Reporter only |
@@ -232,20 +246,41 @@ parser.add_argument(
 
 **Rationale:**
 - Revocation and renewal have fundamentally different semantics
-- No retry handler needed (failures are policy/protocol, not transient)
+- No dedicated `error_handler` node needed — `cert_revoker` classifies
+  transient-vs-fatal itself and reuses the generic `retry_scheduler` node
+  (see decision 2)
 - Separate trigger model (on-demand vs. scheduled)
 - Cleaner architectural separation, easier to reason about
 - Graph topology remains explicit and visible
 
-### 2. Best-Effort, No Retries
+### 2. Bounded Retry for Transient Failures, Best-Effort for the Rest
 
-**Decision:** Revocation failures are logged; the loop continues to the next domain.
+**Decision:** `cert_revoker` retries a domain, with the same bounded
+exponential backoff as the renewal graph, only when the ACME error is
+classified as transient (rate limiting, server-side 5xx, connection
+failures). All other failures — including exhausting the per-domain retry
+budget — are logged to `failed_revocations`; the loop continues to the next
+domain rather than aborting the run.
 
-**Rationale:**
-- ACME revocation failures (404, 403) usually indicate policy violations
-- RFC 8555 doesn't require retry on revocation failure
-- Retrying won't fix "unauthorized" or "certificate not found" errors
-- Users can manually retry via CLI if needed
+**Rationale (revised — the original no-retry-at-all design underestimated
+this):**
+- ACME revocation failures like "unauthorized" (403) or a missing local
+  cert file are policy/protocol rejections — retrying cannot fix them, so
+  they stay fatal, unretried
+- But other revocation failures ARE transient (a CA's `/revokeCert`
+  endpoint timing out, hitting a rate limit, a momentary 5xx) — treating
+  those identically to a policy rejection meant a single network blip could
+  leave a certificate revoked from nothing, with no automatic follow-up.
+  This matters more for revocation than renewal: renewal gets a "next
+  scheduled run" safety net for free; a failed on-demand revocation only
+  gets retried if a human notices and reruns the CLI — the worst case for
+  the most urgent reason code (`keyCompromise`)
+- Exhausting the retry budget still falls back to best-effort log-and-continue
+  rather than a new abort-the-whole-run path, so this preserves
+  `CLAUDE.md`'s "fail toward doing nothing" property rather than trading it
+  for a whole-run abort revocation never had before
+- Users can still manually rerun the CLI for any domain that ends up in
+  `failed_revocations` after retries are exhausted
 
 ### 3. Account Key Never in State
 
@@ -356,7 +391,7 @@ All CLAUDE.md hard invariants are satisfied:
 | Account key never in state | ✅ | Loaded from disk by `cert_revoker`, never returned |
 | LLM output validated | ✅ | `revocation_reporter` receives safe, controlled inputs |
 | No concurrent ACME ops | ✅ | Sequential domain loop, one at a time |
-| Retry logic isolated | ✅ | No retry in revocation graph (best-effort) |
+| Retry logic isolated | ✅ | Bounded retry for transient errors only, reusing the generic `retry_scheduler` node; policy/protocol failures stay best-effort |
 | Certificate writes atomic | ✅ | N/A (revocation doesn't write certs) |
 | Graph topology changes → update docs | ✅ | Updated DESIGN_PRINCIPLES.md § 11 |
 | Every network call = named node | ✅ | `revocation_account_setup` + `cert_revoker` |

@@ -7,12 +7,18 @@ Topology:
     → pick_next_revocation_domain   [new node: pops revocation_targets]
     → cert_revoker                  [new node: POST /revokeCert]
     → revocation_loop_router
-      ├─(next_domain)→ pick_next_revocation_domain  [loop]
-      └─(all_done)→   revocation_reporter           [deterministic summary]
+      ├─(retry)→       retry_scheduler → cert_revoker [loop, same domain]
+      ├─(next_domain)→ pick_next_revocation_domain     [loop, next domain]
+      └─(all_done)→   revocation_reporter              [deterministic summary]
     → END
 
-No error_handler/retry in the revocation graph — failures are logged and
-the loop continues (revocation is best-effort).
+Retries are bounded and narrow: cert_revoker only retries errors it
+classifies as transient (rate limiting, server-side 5xx, connection
+failures — see agent/nodes/revoker.py); policy/protocol failures
+(unauthorized, alreadyRevoked, malformed, missing local cert file) are
+still logged and the loop moves straight to the next domain, unretried.
+Exhausting the per-domain retry budget (max_retries) falls back to that
+same best-effort behavior rather than aborting the whole run.
 """
 from __future__ import annotations
 
@@ -41,6 +47,7 @@ def build_revocation_graph(use_checkpointing: bool = False):
         "revocation_account_setup",
         "pick_next_revocation_domain",
         "cert_revoker",
+        "retry_scheduler",
         "revocation_reporter",
     ]
     for node_name in revocation_nodes:
@@ -51,15 +58,21 @@ def build_revocation_graph(use_checkpointing: bool = False):
     builder.add_edge("revocation_account_setup", "pick_next_revocation_domain")
     builder.add_edge("pick_next_revocation_domain", "cert_revoker")
 
-    # After cert_revoker: route based on remaining revocation_targets
+    # After cert_revoker: retry (same domain), advance (next domain), or finish
     builder.add_conditional_edges(
         "cert_revoker",
         revocation_loop_router,
         {
+            "retry": "retry_scheduler",
             "next_domain": "pick_next_revocation_domain",
             "all_done": "revocation_reporter",
         },
     )
+    # Retry loops straight back to cert_revoker — current_revocation_domain
+    # is preserved by cert_revoker on the retry path, so this does NOT go
+    # through pick_next_revocation_domain (that would advance to the next
+    # domain instead of retrying this one).
+    builder.add_edge("retry_scheduler", "cert_revoker")
 
     builder.add_edge("revocation_reporter", END)
 
@@ -73,6 +86,7 @@ def revocation_initial_state(
     reason: int,
     cert_store_path: str = "./certs",
     account_key_path: str = "./account.key",
+    max_retries: int = 3,
 ) -> dict:
     """
     Build the initial AgentState dict for a revocation run.
@@ -82,6 +96,9 @@ def revocation_initial_state(
         reason: RFC 5280 reason code
         cert_store_path: Path to cert store
         account_key_path: Path to account key
+        max_retries: Per-domain retry budget for transient cert_revoker
+            failures (see agent/nodes/revoker.py). Same knob/default as the
+            renewal graph's config.MAX_RETRIES.
 
     Returns:
         Minimal state with revocation_* fields initialized.
@@ -108,7 +125,7 @@ def revocation_initial_state(
         "retry_count": 0,
         "retry_delay_seconds": 5,
         "retry_not_before": None,
-        "max_retries": 0,
+        "max_retries": max_retries,
         "cert_metadata": {},
         "revocation_targets": domains,
         "current_revocation_domain": None,
