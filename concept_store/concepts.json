@@ -677,24 +677,50 @@
     "revocation-graph-best-effort-looping": {
       "confidence": 0.85,
       "contracts": [
-        "revocation_reporter always receives complete revoked_domains/failed_revocations lists after all targets are processed"
+        "revocation_reporter always receives complete revoked_domains/failed_revocations lists after all targets are processed",
+        "The retry edge (retry_scheduler -> cert_revoker) never routes through pick_next_revocation_domain, which would silently advance to the next domain instead of retrying the current one"
       ],
       "created_at": "2026-07-03T22:48:21.997799+00:00",
-      "description": "The revocation subgraph has no error_handler/retry — cert_revoker failures are logged into failed_revocations and revocation_loop_router unconditionally continues to the next domain, making revocation best-effort across a batch.",
+      "description": "The revocation subgraph retries a domain's cert_revoker call, bounded by a per-domain max_retries with exponential backoff, only when the ACME error is classified as transient (see revocation-retry-error-classification). Policy/protocol failures and exhausted retries still fall back to the original best-effort behavior: logged into failed_revocations, and revocation_loop_router continues to the next domain.",
       "evidence": [
-        "agent/revocation_graph.py:16-19",
-        "agent/nodes/revocation_router.py:56-65"
+        "agent/revocation_graph.py: conditional_edges from cert_revoker",
+        "agent/nodes/revocation_router.py:revocation_loop_router",
+        "tests/test_revocation.py:test_cert_revoker_retries_transient_error",
+        "tests/test_revocation.py:test_cert_revoker_stops_retrying_after_max_retries"
       ],
       "invariants": [
-        "A single domain's revocation failure never halts processing of remaining revocation_targets"
+        "A single domain's revocation failure (fatal, or transient after exhausting retries) never halts processing of remaining revocation_targets",
+        "current_revocation_domain is preserved across a retry, only cleared on success or terminal failure"
       ],
-      "last_validated": "2026-07-14T23:00:44.681391+00:00",
+      "last_validated": "2026-08-15T12:04:28.103729+00:00",
       "module": "agent/revocation_graph.py",
       "name": "revocation-graph-best-effort-looping",
       "related": [
         "graph-mode-branching-acme-vs-spiffe",
         "node-registry-class-instantiation-factory"
       ]
+    },
+    "revocation-retry-error-classification": {
+      "confidence": 0.8,
+      "contracts": [
+        "A retry only occurs when _is_retryable_error(exc) is true AND retry_count < max_retries",
+        "On a scheduled retry, current_revocation_domain, revocation_targets and revoked/failed lists are left untouched -- only retry_count/retry_delay_seconds/retry_not_before and current_nonce/error_log are updated"
+      ],
+      "created_at": "2026-08-15T12:04:35.936412+00:00",
+      "description": "cert_revoker classifies a caught AcmeError by an explicit allowlist of problem-type substrings (ratelimited, serverinternal, connection) as transient/retryable; everything else -- including unrecognized error types -- is treated as fatal. This is the inverse of error_handler.py's renewal-graph approach, which treats unknown errors as retryable by default (blocklist of known-fatal patterns). Chosen deliberately: an unrecognized revocation error is more likely a new policy rejection than a new transient failure mode.",
+      "evidence": [
+        "agent/nodes/revoker.py:_RETRYABLE_ERROR_PATTERNS",
+        "agent/nodes/revoker.py:_is_retryable_error",
+        "agent/nodes/revoker.py:CertRevokerNode.run",
+        "tests/test_revocation.py:test_cert_revoker_does_not_retry_fatal_alreadyrevoked"
+      ],
+      "invariants": [
+        "Missing local cert file is always fatal (not an AcmeError, can't be transient)",
+        "retry_count resets to 0 whenever pick_next_revocation_domain advances to a new domain -- the retry budget is per-domain, not per-run"
+      ],
+      "last_validated": "2026-08-15T12:04:35.936425+00:00",
+      "module": "agent/nodes/revoker.py",
+      "name": "revocation-retry-error-classification"
     },
     "runtime-settings-override-singleton-swap": {
       "confidence": 0.85,
@@ -747,6 +773,6 @@
     "extracted_at": "2026-07-04T03:55:16.785719+00:00",
     "last_reviewed": "2026-07-14T23:01:26.831965+00:00",
     "note": "validated at 537226e0c7be97d19517385e35523d0b6158c5c4; deep-corrected evidence for config.py/main.py/scanner.py/storage.py-derived concepts (drifted line ranges from AcmeConfig/SpiffeConfig split + CLI additions), fast-path bumped last_validated for concepts whose module had zero commits since prior extraction commit 4d79b09a1a0699e9807113c883511f6001034b73",
-    "updated_at": "2026-08-02T00:24:53.756589+00:00"
+    "updated_at": "2026-08-15T12:04:35.936460+00:00"
   }
 }
