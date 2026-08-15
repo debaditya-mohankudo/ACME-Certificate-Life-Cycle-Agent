@@ -14,6 +14,10 @@ but treat drift as a bug either way.
 - **`renewal_lifecycle.sysml`** — the ACME renewal workflow as a state
   machine, transcribed from the `add_edge`/`add_conditional_edges` calls in
   `agent/graph.py:build_graph`.
+- **`revocation_lifecycle.sysml`** — the ACME revocation workflow as a state
+  machine, transcribed from `agent/revocation_graph.py:build_revocation_graph`.
+  A separate compiled graph from renewal, best-effort per domain (no abort
+  path) rather than a run-level abort.
 - **`requirements.sysml`** — requirements traced one-to-one to the code that
   satisfies each of them, sourced from `concept_store/concepts.json` and the
   modules themselves.
