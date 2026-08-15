@@ -44,6 +44,7 @@ EXPECTED = {
     "foundation.sysml",
     "acme_agent_system.sysml",
     "renewal_lifecycle.sysml",
+    "revocation_lifecycle.sysml",
     "requirements.sysml",
 }
 
