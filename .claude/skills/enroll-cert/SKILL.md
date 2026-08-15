@@ -72,8 +72,9 @@ per line, so you can grep it for `"level": "ERROR"` or scan the final summary
 line from `agent/nodes/reporter.py`.
 
 If it succeeds: tell the user where the cert landed (`CERT_STORE_PATH`, default
-`./certs/<domain>/`: `cert.pem`, `chain.pem`, `fullchain.pem`, `metadata.json`)
-and stop here.
+`./certs`, with a `<domain>/` subfolder per domain created by
+`agent/nodes/storage.py`: `cert.pem`, `chain.pem`, `fullchain.pem`,
+`metadata.json`) and stop here.
 
 ## 3. If challenge validation failed — diagnose, don't just relay
 
