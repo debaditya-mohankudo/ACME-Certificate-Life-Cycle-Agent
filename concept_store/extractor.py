@@ -61,7 +61,11 @@ For each logical unit (file or coherent subsystem), return one JSON object with:
   - invariants: list of strings — constraints that must always hold
   - contracts: list of strings — what this module promises its callers
   - confidence: float 0.0–1.0 — how certain you are about this concept
-  - evidence: list of "file:line" strings referencing where you saw this
+  - evidence: list of "file", "file:symbol", or "file:Class.method" strings
+    referencing where you saw this — a symbol name only, never a line number
+    or range (e.g. "agent/nodes/csr.py:CsrGeneratorNode.run", not
+    "agent/nodes/csr.py:56-60"); use the bare filename when nothing
+    encloses the cited spot
 
 Return a single top-level JSON array of these objects. Nothing else.
 """
