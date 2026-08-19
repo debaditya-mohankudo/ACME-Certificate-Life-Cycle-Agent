@@ -187,6 +187,13 @@ class AcmeConfig(_BaseAppSettings):
     # Only consulted when CA_PROVIDER="custom"
     ACME_DIRECTORY_URL: str = ""
 
+    # Operator-supplied finalize params (--optional-keys key:value ...),
+    # validated at construction against acme.client._FINALIZE_PARAM_WHITELIST
+    # for the active CA_PROVIDER. Disjoint by design from whatever a CA
+    # subclass's _extra_finalize_params() sets — see
+    # doc/DESIGN_CA_FINALIZE_PARAM_CUSTOMIZATION.md.
+    OPTIONAL_FINALIZE_PARAMS: dict[str, str] = {}
+
     # ── Domain management ───────────────────────────────────────────────────
     MANAGED_DOMAINS: List[str] = []
     RENEWAL_THRESHOLD_DAYS: int = 30
@@ -254,6 +261,25 @@ class AcmeConfig(_BaseAppSettings):
                 raise ValueError(
                     f"{missing} must be set when CA_PROVIDER='{self.CA_PROVIDER}'. "
                     f"Both ACME_EAB_KEY_ID and ACME_EAB_HMAC_KEY are required together."
+                )
+        return self
+
+    @model_validator(mode="after")
+    def validate_optional_finalize_params(self) -> "AcmeConfig":
+        """Reject any --optional-keys entry not whitelisted for CA_PROVIDER, before any network call."""
+        if not self.OPTIONAL_FINALIZE_PARAMS:
+            return self
+        from acme.client import _FINALIZE_PARAM_WHITELIST
+
+        whitelist = _FINALIZE_PARAM_WHITELIST.get(self.CA_PROVIDER, frozenset())
+        for key in self.OPTIONAL_FINALIZE_PARAMS:
+            if key == "csr":
+                raise ValueError(
+                    "'csr' cannot be set via --optional-keys; finalize_order() always sets it."
+                )
+            if key not in whitelist:
+                raise ValueError(
+                    f"--optional-keys key {key!r} is not whitelisted for CA_PROVIDER={self.CA_PROVIDER!r}."
                 )
         return self
 

@@ -336,16 +336,35 @@ def get_domain_statuses(
     return statuses
 
 
+def parse_optional_keys(tokens: list[str]) -> dict[str, str]:
+    """Parse ``KEY:VALUE`` CLI tokens into a dict.
+
+    Splits each token on the first ``:``; rejects tokens with no colon or an
+    empty key as a parse error (fail fast, before any settings/network work).
+    Whitelist/`"csr"` validation happens later, in AcmeConfig.
+    """
+    parsed: dict[str, str] = {}
+    for token in tokens:
+        if ":" not in token:
+            raise ValueError(f"--optional-keys token {token!r} is missing ':' (expected KEY:VALUE)")
+        key, _, value = token.partition(":")
+        if not key:
+            raise ValueError(f"--optional-keys token {token!r} has an empty key")
+        parsed[key] = value
+    return parsed
+
+
 def build_settings_from_override(
     ca_provider: str | None = None,
     acme_directory_url: str | None = None,
+    optional_finalize_params: dict[str, str] | None = None,
     base_settings: Any | None = None,
 ) -> Any:
     """Build an explicit AcmeConfig object from base settings plus optional overrides."""
     import config
 
     effective_base = base_settings or config.settings
-    if not ca_provider and not acme_directory_url:
+    if not ca_provider and not acme_directory_url and not optional_finalize_params:
         return effective_base
 
     if not isinstance(effective_base, config.AcmeConfig):
@@ -359,6 +378,8 @@ def build_settings_from_override(
         data["CA_PROVIDER"] = ca_provider
     if acme_directory_url is not None:
         data["ACME_DIRECTORY_URL"] = acme_directory_url
+    if optional_finalize_params:
+        data["OPTIONAL_FINALIZE_PARAMS"] = optional_finalize_params
 
     return config.AcmeConfig(**data)
 
@@ -366,9 +387,10 @@ def build_settings_from_override(
 def apply_runtime_settings_overrides(
     ca_provider: str | None = None,
     acme_directory_url: str | None = None,
+    optional_finalize_params: dict[str, str] | None = None,
 ) -> None:
     """Apply one-shot CLI settings overrides by replacing the settings singleton."""
-    if not ca_provider and not acme_directory_url:
+    if not ca_provider and not acme_directory_url and not optional_finalize_params:
         return
 
     import config
@@ -376,13 +398,15 @@ def apply_runtime_settings_overrides(
     config.settings = build_settings_from_override(
         ca_provider=ca_provider,
         acme_directory_url=acme_directory_url,
+        optional_finalize_params=optional_finalize_params,
         base_settings=config.settings,
     )
 
     log.info(
-        "Applied runtime config override: CA_PROVIDER=%s ACME_DIRECTORY_URL=%s",
+        "Applied runtime config override: CA_PROVIDER=%s ACME_DIRECTORY_URL=%s OPTIONAL_FINALIZE_PARAMS=%s",
         config.settings.CA_PROVIDER,
         config.settings.ACME_DIRECTORY_URL,
+        sorted(config.settings.OPTIONAL_FINALIZE_PARAMS) if optional_finalize_params else "{}",
     )
 
 
@@ -469,6 +493,13 @@ Examples:
         help="Override ACME directory URL for this process only (typically with --ca-provider custom)",
     )
     parser.add_argument(
+        "--optional-keys",
+        nargs="+",
+        metavar="KEY:VALUE",
+        help="Extra CA-specific finalize params as key:value pairs, "
+             "validated against the current CA's whitelist",
+    )
+    parser.add_argument(
         "--generate-test-cert",
         metavar="DOMAIN",
         help="Generate a self-signed test certificate for the specified domain",
@@ -499,10 +530,21 @@ Examples:
         parser.print_help()
         sys.exit(1)
 
-    apply_runtime_settings_overrides(
-        ca_provider=args.ca_provider,
-        acme_directory_url=args.acme_directory_url,
-    )
+    optional_finalize_params = None
+    if args.optional_keys:
+        try:
+            optional_finalize_params = parse_optional_keys(args.optional_keys)
+        except ValueError as exc:
+            parser.error(str(exc))
+
+    try:
+        apply_runtime_settings_overrides(
+            ca_provider=args.ca_provider,
+            acme_directory_url=args.acme_directory_url,
+            optional_finalize_params=optional_finalize_params,
+        )
+    except ValueError as exc:
+        parser.error(str(exc))
 
     # ── Command registry for CLI dispatch ────────────────────────────────────
     

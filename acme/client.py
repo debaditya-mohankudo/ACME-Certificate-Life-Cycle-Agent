@@ -55,12 +55,14 @@ class AcmeClient:
         timeout: int = 30,
         ca_bundle: str = "",
         insecure: bool = False,
+        optional_finalize_params: dict[str, str] | None = None,
     ) -> None:
         self.directory_url = directory_url
         self.timeout = timeout
         self._session = requests.Session()
         self._session.headers.update({"User-Agent": "acme-cert-agent/1.0"})
         self._directory_cache: Optional[dict] = None  # Cache directory response
+        self._optional_finalize_params = optional_finalize_params or {}
 
         if insecure:
             import urllib3
@@ -298,6 +300,15 @@ class AcmeClient:
 
     # ── Finalization & certificate download ───────────────────────────────
 
+    def _extra_finalize_params(self) -> dict[str, str]:
+        """CA-specific fields to merge into the finalize payload. Override in subclasses."""
+        return {}
+
+    def _cli_optional_keys(self) -> dict[str, str]:
+        """Operator-supplied finalize params from --optional-keys, already
+        validated against this CA's whitelist at settings-construction time."""
+        return self._optional_finalize_params
+
     def finalize_order(
         self,
         finalize_url: str,
@@ -312,7 +323,10 @@ class AcmeClient:
         """
         import base64
         csr_b64 = base64.urlsafe_b64encode(csr_der).rstrip(b"=").decode()
-        resp = self._post_signed({"csr": csr_b64}, account_key, nonce, finalize_url, account_url)
+        payload = {"csr": csr_b64}
+        payload.update(self._extra_finalize_params())
+        payload.update(self._cli_optional_keys())
+        resp = self._post_signed(payload, account_key, nonce, finalize_url, account_url)
         return resp.json(), resp.headers.get("Replay-Nonce", "")
 
     def poll_order_for_certificate(
@@ -461,8 +475,9 @@ class EabAcmeClient(AcmeClient):
         timeout: int = 30,
         ca_bundle: str = "",
         insecure: bool = False,
+        optional_finalize_params: dict[str, str] | None = None,
     ) -> None:
-        super().__init__(directory_url, timeout, ca_bundle, insecure)
+        super().__init__(directory_url, timeout, ca_bundle, insecure, optional_finalize_params)
         self.eab_key_id = eab_key_id
         self.eab_hmac_key = eab_hmac_key
 
@@ -506,8 +521,9 @@ class DigiCertAcmeClient(EabAcmeClient):
         timeout: int = 30,
         ca_bundle: str = "",
         insecure: bool = False,
+        optional_finalize_params: dict[str, str] | None = None,
     ) -> None:
-        super().__init__(eab_key_id, eab_hmac_key, directory_url, timeout, ca_bundle, insecure)
+        super().__init__(eab_key_id, eab_hmac_key, directory_url, timeout, ca_bundle, insecure, optional_finalize_params)
     # create_account inherited from EabAcmeClient
 
 
@@ -524,8 +540,9 @@ class ZeroSSLAcmeClient(EabAcmeClient):
         timeout: int = 30,
         ca_bundle: str = "",
         insecure: bool = False,
+        optional_finalize_params: dict[str, str] | None = None,
     ) -> None:
-        super().__init__(eab_key_id, eab_hmac_key, directory_url, timeout, ca_bundle, insecure)
+        super().__init__(eab_key_id, eab_hmac_key, directory_url, timeout, ca_bundle, insecure, optional_finalize_params)
     # create_account inherited from EabAcmeClient
 
 
@@ -542,8 +559,9 @@ class SectigoAcmeClient(EabAcmeClient):
         timeout: int = 30,
         ca_bundle: str = "",
         insecure: bool = False,
+        optional_finalize_params: dict[str, str] | None = None,
     ) -> None:
-        super().__init__(eab_key_id, eab_hmac_key, directory_url, timeout, ca_bundle, insecure)
+        super().__init__(eab_key_id, eab_hmac_key, directory_url, timeout, ca_bundle, insecure, optional_finalize_params)
     # create_account inherited from EabAcmeClient
 
 
@@ -559,16 +577,32 @@ class LetsEncryptAcmeClient(AcmeClient):
         timeout: int = 30,
         ca_bundle: str = "",
         insecure: bool = False,
+        optional_finalize_params: dict[str, str] | None = None,
     ) -> None:
         url = self.STAGING_DIRECTORY_URL if staging else self.PRODUCTION_DIRECTORY_URL
-        super().__init__(url, timeout, ca_bundle, insecure)
+        super().__init__(url, timeout, ca_bundle, insecure, optional_finalize_params)
     # create_account inherited from AcmeClient (plain, no EAB)
+
+
+# Governs what an *operator* may set via --optional-keys for a given CA —
+# independent of, and disjoint from, whatever keys a subclass's
+# _extra_finalize_params() sets by default (see tests/test_finalize_params.py).
+# A CA absent from this dict is treated as an empty whitelist (fail closed).
+_FINALIZE_PARAM_WHITELIST: dict[str, frozenset[str]] = {
+    "digicert": frozenset(),
+    "letsencrypt": frozenset(),
+    "letsencrypt_staging": frozenset(),
+    "zerossl": frozenset(),
+    "sectigo": frozenset(),
+    "custom": frozenset(),
+}
 
 
 def _client_registry(ca_provider: str, settings: Any) -> AcmeClient:
     """Return the AcmeClient instance for the given CA provider and settings."""
     ca_bundle: str = settings.ACME_CA_BUNDLE
     insecure: bool = settings.ACME_INSECURE
+    optional_finalize_params: dict[str, str] = getattr(settings, "OPTIONAL_FINALIZE_PARAMS", {})
     registry: dict[str, Any] = {
         "digicert": partial(
             DigiCertAcmeClient,
@@ -576,17 +610,20 @@ def _client_registry(ca_provider: str, settings: Any) -> AcmeClient:
             eab_hmac_key=settings.ACME_EAB_HMAC_KEY,
             ca_bundle=ca_bundle,
             insecure=insecure,
+            optional_finalize_params=optional_finalize_params,
         ),
         "letsencrypt": partial(
             LetsEncryptAcmeClient,
             ca_bundle=ca_bundle,
             insecure=insecure,
+            optional_finalize_params=optional_finalize_params,
         ),
         "letsencrypt_staging": partial(
             LetsEncryptAcmeClient,
             staging=True,
             ca_bundle=ca_bundle,
             insecure=insecure,
+            optional_finalize_params=optional_finalize_params,
         ),
         "zerossl": partial(
             ZeroSSLAcmeClient,
@@ -594,6 +631,7 @@ def _client_registry(ca_provider: str, settings: Any) -> AcmeClient:
             eab_hmac_key=settings.ACME_EAB_HMAC_KEY,
             ca_bundle=ca_bundle,
             insecure=insecure,
+            optional_finalize_params=optional_finalize_params,
         ),
         "sectigo": partial(
             SectigoAcmeClient,
@@ -601,12 +639,14 @@ def _client_registry(ca_provider: str, settings: Any) -> AcmeClient:
             eab_hmac_key=settings.ACME_EAB_HMAC_KEY,
             ca_bundle=ca_bundle,
             insecure=insecure,
+            optional_finalize_params=optional_finalize_params,
         ),
         "custom": partial(
             AcmeClient,
             directory_url=settings.ACME_DIRECTORY_URL,
             ca_bundle=ca_bundle,
             insecure=insecure,
+            optional_finalize_params=optional_finalize_params,
         ),
     }
     try:

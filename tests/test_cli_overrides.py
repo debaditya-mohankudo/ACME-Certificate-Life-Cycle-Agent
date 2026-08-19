@@ -265,6 +265,7 @@ def test_cli_applies_runtime_overrides_before_action(monkeypatch):
     assert order[0][1] == {
         "ca_provider": "custom",
         "acme_directory_url": "https://localhost:14000/dir",
+        "optional_finalize_params": None,
     }
     assert order[1] == ("run_once", ["a.example.com", "b.example.com"], False)
 
