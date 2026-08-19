@@ -137,6 +137,32 @@
         "pem-chain-leaf-vs-intermediate-split"
       ]
     },
+    "ca-specific-finalize-param-extension": {
+      "confidence": 0.8,
+      "contracts": [
+        "AcmeClient._extra_finalize_params() returns dict[str, str]; base class default is {} (acme/client.py:301-316).",
+        "_FINALIZE_PARAM_WHITELIST maps CA_PROVIDER -> frozenset[str] of operator-settable keys; a CA with no entry gets frozenset() via .get(..., frozenset()) (fail closed, acme/client.py:591).",
+        "'csr' can never appear in any CA's whitelist and is always set from the CSR itself, never overridable.",
+        "OPTIONAL_FINALIZE_PARAMS (from --optional-keys) is validated against the whitelist at AcmeConfig construction (config.py model_validator), never at finalize_order() call time."
+      ],
+      "created_at": "2026-08-19T03:22:10.743036+00:00",
+      "description": "finalize_order() merges the base {csr} payload with two additive, disjoint sources of extra fields: a subclass hook (_extra_finalize_params()) for CA-coded defaults, and operator-supplied --optional-keys validated against a per-CA whitelist. Neither source is allowed to override the other or 'csr'.",
+      "evidence": [
+        "acme/client.py:_extra_finalize_params",
+        "acme/client.py:finalize_order",
+        "acme/client.py:_FINALIZE_PARAM_WHITELIST",
+        "config.py:AcmeConfig.validate_optional_finalize_params",
+        "main.py:parse_optional_keys",
+        "tests/test_finalize_params.py:test_whitelist_disjoint_from_hook_defaults"
+      ],
+      "invariants": [
+        "For every CA_PROVIDER in _client_registry, that CA's whitelist and its subclass's _extra_finalize_params() default keys are disjoint by construction — enforced by tests/test_finalize_params.py, not a runtime/startup assertion.",
+        "A key colliding between the whitelist and hook defaults is a configuration bug and must raise, never silently resolved by picking a winner."
+      ],
+      "last_validated": "2026-08-19T03:22:10.743547+00:00",
+      "module": "acme/client.py",
+      "name": "ca-specific-finalize-param-extension"
+    },
     "cert-issuance-mode-strict-exclusivity": {
       "confidence": 0.95,
       "contracts": [
@@ -838,6 +864,6 @@
     "extracted_at": "2026-07-04T03:55:16.785719+00:00",
     "last_reviewed": "2026-07-14T23:01:26.831965+00:00",
     "note": "validated at 537226e0c7be97d19517385e35523d0b6158c5c4; deep-corrected evidence for config.py/main.py/scanner.py/storage.py-derived concepts (drifted line ranges from AcmeConfig/SpiffeConfig split + CLI additions), fast-path bumped last_validated for concepts whose module had zero commits since prior extraction commit 4d79b09a1a0699e9807113c883511f6001034b73",
-    "updated_at": "2026-08-18T16:49:29.593753+00:00"
+    "updated_at": "2026-08-19T03:22:10.743614+00:00"
   }
 }
