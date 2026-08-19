@@ -76,3 +76,14 @@ misleads the next person, who has no way to know which half to trust.
 
 If a change conflicts with a principle above, that is not automatically a veto —
 but it has to be argued for explicitly, and the argument belongs in writing.
+
+## Knowledge base
+
+`concept_store/concepts.json` and `models/*.sysml` are two complementary maps
+of this codebase, not source of truth — the code is. `concepts.json` records
+non-obvious invariants and contracts per module (evidence-cited, symbol-based)
+so a change that touches a documented concept should update or add an entry
+in the same breath. `models/` holds the SysML structural and requirements
+model; it only needs revisiting when a change alters structure, routing,
+protocol behaviour, or the shape of workflow state, per the rule above —
+routine feature work usually doesn't require touching it.
