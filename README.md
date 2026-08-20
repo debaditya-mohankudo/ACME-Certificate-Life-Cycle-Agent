@@ -61,6 +61,9 @@ screens that launch `main.py --once`/`--revoke-cert` as a subprocess and
 stream its output live, with automatic plain-English diagnosis (DNS/HTTP
 checks, same logic as the `enroll-cert` skill) if a run fails.
 
+## Project Planning
+Epic planning, subtask creation, task grooming, task implementation using https://github.com/debaditya-mohankudo/Lite-Task-Framework
+
 ## License
 
 This project is licensed under the MIT License – see the [LICENSE](LICENSE) file for details.
