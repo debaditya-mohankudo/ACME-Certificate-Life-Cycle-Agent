@@ -79,11 +79,20 @@ but it has to be argued for explicitly, and the argument belongs in writing.
 
 ## Knowledge base
 
-`concept_store/concepts.json` and `models/*.sysml` are two complementary maps
-of this codebase, not source of truth — the code is. `concepts.json` records
-non-obvious invariants and contracts per module (evidence-cited, symbol-based)
-so a change that touches a documented concept should update or add an entry
-in the same breath. `models/` holds the SysML structural and requirements
-model; it only needs revisiting when a change alters structure, routing,
-protocol behaviour, or the shape of workflow state, per the rule above —
-routine feature work usually doesn't require touching it.
+`concept_store/concepts.json`, `models/*.sysml`, and `ontology/*.json` are
+three complementary maps of this codebase, not source of truth — the code is.
+`concepts.json` records non-obvious invariants and contracts per module
+(evidence-cited, symbol-based) so a change that touches a documented concept
+should update or add an entry in the same breath — it answers "what does this
+module promise." `models/` holds the SysML structural and requirements model;
+it only needs revisiting when a change alters structure, routing, protocol
+behaviour, or the shape of workflow state, per the rule above — routine
+feature work usually doesn't require touching it. `ontology/` records the
+domain's ubiquitous language — what each cross-cutting term (AgentState,
+AcmeOrder, CertIssuanceMode, ...) means and how it relates to the others,
+evidence-cited the same way as `concepts.json` — it answers "what is this
+thing, and what is it to the others," since a term there can span several
+modules and a module can define several terms, unlike `concepts.json`'s
+per-file shape. It only needs revisiting when a change introduces, renames,
+or changes the relationship between domain terms — routine feature work
+usually doesn't require touching it either.

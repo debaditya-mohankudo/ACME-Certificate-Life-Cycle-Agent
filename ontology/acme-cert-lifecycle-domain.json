@@ -1,0 +1,160 @@
+{
+  "meta": {
+    "note": "Ubiquitous-language ontology for this repo's domain: the vocabulary the code embodies, and the explicit typed relations between terms (is-a, part-of, relates, persists, references, describes, determines). Deliberately separate from concept_store/concepts.json -- that store is architecture PER MODULE (one summary per file) and answers 'what does this module promise'. This file is vocabulary PER DOMAIN TERM and answers 'what is this thing, and what is it to the others' -- a term here can span several modules (AgentState alone is written and read by a dozen node modules), and a module can define several terms, so it does not fit concept_store's per-file shape. Ground truth is still the code; this is a durable, human-readable map of the graph rather than N separate summaries. Modelled on task-framework/ontology/task-domain.json.",
+    "repo": "ACME_Cert_Life_Cycle_Agent_By_Claude_Cowork",
+    "created_at": "2026-08-25"
+  },
+  "bounded_contexts": {
+    "ACME Protocol Flow": "RFC 8555 vocabulary: accounts, orders, authorizations, challenges, finalization. The wire-level exchange with the certificate authority, independent of how the agent decides to trigger it.",
+    "Agent Orchestration": "The LangGraph machinery that drives ACME Protocol Flow and SPIFFE Attestation Flow to completion: shared state, node callables, routers, and the two compiled graphs (renewal, revocation).",
+    "SPIFFE Attestation Flow": "The alternate, non-ACME issuance path: workload identity via SPIRE Agent's Workload API. Shares Agent Orchestration's state/graph shape but has almost no vocabulary in common with ACME Protocol Flow -- SVIDs and trust domains, not orders and challenges.",
+    "Certificate Lifecycle Management": "What happens to a certificate once key material exists: on-disk storage layout, expiry scanning, renewal planning/prioritisation, and revocation -- the concerns that exist regardless of which flow produced the certificate.",
+    "Configuration": "Settings resolution: which issuance mode is active, which CA provider and directory URL apply, and how operator input (env vars, CLI overrides, MCP call-scoped overrides) is validated and merged."
+  },
+  "terms": {
+    "AgentState": {
+      "bounded_context": "Agent Orchestration",
+      "definition": "The single TypedDict shared by both the renewal graph and the revocation graph. Every node reads and returns a partial slice of it; LangGraph merges partial returns into the running state. Carries ACME-flow fields (current_order, acme_account_url), SPIFFE-flow fields, and revocation fields side by side, though a given compiled graph only touches one subset. Never carries raw private key material -- only paths to it on disk.",
+      "evidence": "agent/state.py:AgentState"
+    },
+    "AcmeOrder": {
+      "bounded_context": "ACME Protocol Flow",
+      "definition": "One in-flight ACME order, potentially spanning multiple domains (SAN certificate). Its list fields (auth_urls, challenge_urls, challenge_tokens, key_authorizations, auth_domains, dns_txt_values) are parallel arrays, one entry per identifier/authorization, always kept the same length. Held inside AgentState as current_order, not a standalone table.",
+      "evidence": "agent/state.py:AcmeOrder"
+    },
+    "CertRecord": {
+      "bounded_context": "Certificate Lifecycle Management",
+      "definition": "One domain's scan result: paths to its cert/key on disk (if any), computed expiry and days-until-expiry, whether it needs renewal, and the CA that issued it (advisory only, never authoritative -- see CaMismatchDetection). Produced by CertificateScannerNode, consumed by RenewalPlannerNode.",
+      "evidence": "agent/state.py:CertRecord"
+    },
+    "Challenge": {
+      "bounded_context": "ACME Protocol Flow",
+      "definition": "RFC 8555 proof-of-control step for one authorization: HTTP-01 (serve a token at a well-known URL) or DNS-01 (publish a TXT record), chosen once per run via HTTP_CHALLENGE_MODE and never mixed mid-order. Represented in AcmeOrder as parallel entries in challenge_urls/challenge_tokens/key_authorizations, not as its own object.",
+      "evidence": "agent/nodes/order.py:OrderInitializerNode.run, agent/state.py:AcmeOrder"
+    },
+    "ChallengeVerifierNode": {
+      "bounded_context": "ACME Protocol Flow",
+      "definition": "The node that responds to a Challenge and polls until the CA marks its authorization valid. Checks authorization status before responding, since the CA may already consider an authorization valid from a prior order (RFC 8555 §7.5 reuse) and re-responding to an already-valid challenge is a protocol error.",
+      "evidence": "agent/nodes/challenge.py:ChallengeVerifierNode"
+    },
+    "OrderFinalizerNode": {
+      "bounded_context": "ACME Protocol Flow",
+      "definition": "Submits the CSR to an order's finalize URL and polls until the CA hands back a certificate URL, per RFC 8555 §7.4. Transitions AcmeOrder.status toward 'valid' on success or 'invalid' on failure; does not itself download the certificate.",
+      "evidence": "agent/nodes/finalizer.py:OrderFinalizerNode"
+    },
+    "CertDownloaderNode": {
+      "bounded_context": "ACME Protocol Flow",
+      "definition": "POST-as-GETs the certificate URL produced by OrderFinalizerNode and stores the returned full PEM chain onto AcmeOrder. Re-downloading is replay-safe per RFC 8555 §7.4.2 -- the certificate URL is stable and idempotent.",
+      "evidence": "agent/nodes/finalizer.py:CertDownloaderNode"
+    },
+    "NodeCallable": {
+      "bounded_context": "Agent Orchestration",
+      "definition": "The structural (Protocol, not inheritance) contract every graph node satisfies: callable with an AgentState, returns a dict of partial state updates. The thing that lets NODE_REGISTRY instantiate any registered class uniformly regardless of what ACME/SPIFFE/revocation step it implements.",
+      "evidence": "agent/nodes/base.py:NodeCallable"
+    },
+    "NodeRegistry": {
+      "bounded_context": "Agent Orchestration",
+      "definition": "The lookup that turns a node name into a fresh NodeCallable instance for graph wiring. Enforces that every registered value is a class, never a pre-built instance or bare function, so each compiled graph gets its own node state.",
+      "evidence": "agent/nodes/registry.py:get_node"
+    },
+    "RenewalPlannerNode": {
+      "bounded_context": "Certificate Lifecycle Management",
+      "definition": "Decides pending_renewals' order from the scanned CertRecords, either via an LLM (advisory prioritisation only, validated against managed_domains afterward) or a deterministic fallback (no-cert domains first, then soonest-to-expire) when LLM_DISABLED is set. The deterministic path is what actually gates a real renewal decision; the LLM path can only reorder or drop within it, never invent a domain to act on.",
+      "evidence": "agent/nodes/planner.py:RenewalPlannerNode"
+    },
+    "ErrorHandlerNode": {
+      "bounded_context": "Agent Orchestration",
+      "definition": "Classifies an ACME error as fatal (forces abort regardless of retry budget) or retryable (exponential backoff, capped, until max_retries exhausted), writing the decision into AgentState.error_action for ErrorActionRouter to read verbatim -- never re-derived from error_analysis prose.",
+      "evidence": "agent/nodes/error_handler.py:ErrorHandlerNode"
+    },
+    "RetrySchedulerNode": {
+      "bounded_context": "Agent Orchestration",
+      "definition": "Sleeps until AgentState.retry_not_before elapses, then clears it. Exists to decouple the retry decision (ErrorHandlerNode) from actually enforcing the wait, so a node can be tested/graded on the decision without waiting in real time.",
+      "evidence": "agent/nodes/retry_scheduler.py:RetrySchedulerNode"
+    },
+    "PickNextDomainNode": {
+      "bounded_context": "Certificate Lifecycle Management",
+      "definition": "Pops the next domain off pending_renewals and resets per-domain transient AgentState fields (current_order, current_nonce, retry_count) so each domain's ACME flow starts from a clean slate rather than inheriting the previous domain's in-flight order.",
+      "evidence": "agent/nodes/router.py:PickNextDomainNode"
+    },
+    "PickNextRevocationDomainNode": {
+      "bounded_context": "Certificate Lifecycle Management",
+      "definition": "The revocation-graph analogue of PickNextDomainNode: pops revocation_targets, sets current_revocation_domain, and resets the per-domain retry budget -- retries are scoped to one domain's revocation attempt, not the whole run.",
+      "evidence": "agent/nodes/revocation_router.py:PickNextRevocationDomainNode"
+    },
+    "RevocationLoopRouter": {
+      "bounded_context": "Certificate Lifecycle Management",
+      "definition": "Routes after cert_revoker to one of retry (same domain, via retry_scheduler), next_domain, or all_done. A single domain's revocation failure -- fatal, or transient after exhausting its retry budget -- never halts the run; it is logged into failed_revocations and the loop advances.",
+      "evidence": "agent/nodes/revocation_router.py:revocation_loop_router"
+    },
+    "SpiffeAttestorNode": {
+      "bounded_context": "SPIFFE Attestation Flow",
+      "definition": "SPIFFE mode's analogue of the ACME account/order/challenge/csr/finalizer chain in one node: fetches an SVID for the current SPIFFE ID from the SPIRE Agent's Workload API over a local Unix socket, writes the private key to disk itself (mirroring CsrGeneratorNode's role), and populates current_order.full_chain_pem so the existing storage_manager node can be reused unchanged. A permission-denied response for an unregistered workload is expected non-fatal behaviour, treated the same as any other flow's recoverable error.",
+      "evidence": "agent/nodes/spiffe_attestor.py:SpiffeAttestorNode"
+    },
+    "SVID": {
+      "bounded_context": "SPIFFE Attestation Flow",
+      "definition": "SPIFFE Verifiable Identity Document: the cert + key pair the Workload API hands back for a given SPIFFE ID. The SPIFFE-flow equivalent of an ACME-issued certificate + AcmeOrder.certificate_url, but obtained via local attestation rather than a challenge/response protocol.",
+      "evidence": "agent/nodes/spiffe_attestor.py:SpiffeAttestorNode.run"
+    },
+    "AcmeConfig": {
+      "bounded_context": "Configuration",
+      "definition": "The pydantic settings class active when CERT_ISSUANCE_MODE=acme: CA_PROVIDER, ACME_DIRECTORY_URL resolution, MANAGED_DOMAINS, EAB credentials. Its fields do not exist at all on the settings object when SpiffeConfig is active instead -- accessing them raises AttributeError, there is no silent default.",
+      "evidence": "config.py:AcmeConfig"
+    },
+    "SpiffeConfig": {
+      "bounded_context": "Configuration",
+      "definition": "The pydantic settings class active when CERT_ISSUANCE_MODE=spiffe: SPIRE_AGENT_SOCKET_PATH, SPIFFE_TRUST_DOMAIN, MANAGED_SPIFFE_IDS. Mutually exclusive with AcmeConfig by construction, never both live in one process.",
+      "evidence": "config.py:SpiffeConfig"
+    },
+    "CertIssuanceMode": {
+      "bounded_context": "Configuration",
+      "definition": "The CERT_ISSUANCE_MODE value ('acme' or 'spiffe') that make_settings() dispatches on to construct exactly one of AcmeConfig/SpiffeConfig, and that build_graph() dispatches on to wire exactly one of the ACME or SPIFFE node sets into the compiled StateGraph. The single switch that determines which bounded context (ACME Protocol Flow vs SPIFFE Attestation Flow) is live for a process.",
+      "evidence": "config.py:_ModeBootstrap, agent/graph.py:build_graph"
+    },
+    "AcmeAccountKey": {
+      "bounded_context": "ACME Protocol Flow",
+      "definition": "The ACME account's private key. Deliberately never travels through AgentState (would leak into LangSmith traces) -- only its filesystem path (account_key_path) is kept in state, and any node needing the key loads it fresh from disk.",
+      "evidence": "agent/state.py:AgentState, agent/nodes/account.py"
+    },
+    "DomainPrivateKey": {
+      "bounded_context": "Certificate Lifecycle Management",
+      "definition": "The per-domain private key generated alongside a CSR (ACME flow) or handed back by the Workload API (SPIFFE flow). Written straight to disk at mode 0o600 by the node that creates it; its content never appears in AgentState, matching AcmeAccountKey's treatment.",
+      "evidence": "agent/nodes/csr.py:CsrGeneratorNode.run, agent/nodes/spiffe_attestor.py:SpiffeAttestorNode.run"
+    }
+  },
+  "relations": [
+    {"subject": "AcmeOrder", "predicate": "part-of", "object": "AgentState",
+     "note": "Held as AgentState.current_order; no standalone table or id of its own outside the state slice that carries it."},
+    {"subject": "Challenge", "predicate": "part-of", "object": "AcmeOrder",
+     "note": "Represented as parallel list entries (challenge_urls/challenge_tokens/key_authorizations), not a separate object -- the parallel-array invariant across those lists is how a Challenge stays addressable at all."},
+    {"subject": "CertRecord", "predicate": "part-of", "object": "AgentState",
+     "note": "Held as AgentState.cert_records, one per managed domain, produced by scanning and consumed by RenewalPlannerNode."},
+    {"subject": "NodeRegistry", "predicate": "persists", "object": "NodeCallable",
+     "note": "Not persistence in the storage sense -- 'persists' here means NodeRegistry is the sole place instances of any NodeCallable are constructed from, matching TaskStore's role for Task in the reference ontology."},
+    {"subject": "CertIssuanceMode", "predicate": "determines", "object": "AcmeConfig",
+     "note": "make_settings() constructs AcmeConfig only when CERT_ISSUANCE_MODE=='acme'; the SpiffeConfig fields do not exist on the resulting settings object at all."},
+    {"subject": "CertIssuanceMode", "predicate": "determines", "object": "SpiffeConfig",
+     "note": "Symmetric to the AcmeConfig relation above -- exactly one of the two is ever live, never both."},
+    {"subject": "AgentState", "predicate": "relates", "object": "AcmeConfig",
+     "note": "AgentState carries both ACME-flow and SPIFFE-flow fields simultaneously even though CertIssuanceMode means only one config/flow is active per process -- an intentional shared shape (agent-state-typed-schema in concept_store), not drift."},
+    {"subject": "AgentState", "predicate": "relates", "object": "SpiffeConfig",
+     "note": "Same shared-shape relationship as the AcmeConfig entry above, for the SPIFFE side."},
+    {"subject": "SpiffeAttestorNode", "predicate": "relates", "object": "OrderFinalizerNode",
+     "note": "Functional analogues across bounded contexts: both are the step that turns an in-flight request into usable cert+key material, one via ACME finalize+download, the other via a single Workload API fetch."},
+    {"subject": "SVID", "predicate": "relates", "object": "AcmeOrder",
+     "note": "SVID is what SpiffeAttestorNode writes into current_order.full_chain_pem so storage_manager can be reused unchanged -- the SPIFFE flow deliberately borrows AcmeOrder's field as its handoff point rather than defining a parallel one."},
+    {"subject": "AcmeAccountKey", "predicate": "references", "object": "AgentState",
+     "note": "Only account_key_path is referenced from state; the key itself is loaded fresh from disk by whichever node needs it, never stored inline -- same treatment DomainPrivateKey gets."},
+    {"subject": "DomainPrivateKey", "predicate": "references", "object": "AgentState",
+     "note": "Same non-storage relationship as AcmeAccountKey -- state carries a path or nothing, never key material."},
+    {"subject": "PickNextRevocationDomainNode", "predicate": "is-a", "object": "PickNextDomainNode",
+     "note": "Not a class inheritance relationship (they are separate classes in separate modules) but the same role in the two graphs: pop the next unit of work, reset per-unit transient state, scope the retry budget to that one unit."},
+    {"subject": "RevocationLoopRouter", "predicate": "relates", "object": "ErrorHandlerNode",
+     "note": "Deliberately does NOT reuse ErrorHandlerNode's fatal/retryable classification -- revocation-retry-error-classification in concept_store notes the two use inverse defaults (renewal treats unknown errors as retryable; revocation treats them as fatal) because an unrecognised revocation error more likely means a new policy rejection than a new transient failure."},
+    {"subject": "ErrorHandlerNode", "predicate": "references", "object": "RetrySchedulerNode",
+     "note": "ErrorHandlerNode decides retry vs abort and sets retry_not_before; RetrySchedulerNode is the only node that actually waits on it, then clears it -- the decision and the enforcement are deliberately separate nodes."},
+    {"subject": "CertDownloaderNode", "predicate": "references", "object": "OrderFinalizerNode",
+     "note": "CertDownloaderNode reads AcmeOrder.certificate_url, which only OrderFinalizerNode ever sets -- a one-directional dependency expressed only through shared AgentState fields, not a function call between the two."}
+  ]
+}
