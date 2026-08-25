@@ -483,6 +483,27 @@
         "retry-scheduler-backoff-gate"
       ]
     },
+    "finalize-then-download-two-node-split": {
+      "confidence": 0.8,
+      "contracts": [
+        "CertDownloaderNode assumes current_order.certificate_url was already set by a prior OrderFinalizerNode run in the same domain iteration",
+        "Both nodes write current_nonce back into state after every ACME call so the next node in the chain reuses a fresh nonce instead of re-fetching one"
+      ],
+      "created_at": "2026-08-25T16:12:40.889159+00:00",
+      "description": "RFC 8555 SS7.4 order finalization is split across two nodes: OrderFinalizerNode submits the CSR and polls until a certificate_url appears on the order, then CertDownloaderNode separately POST-as-GETs that URL. Kept as two nodes (not one) so the graph can retry/observe each ACME round-trip independently, and because download is safely re-driveable (SS7.4.2: the certificate URL is stable and re-downloading returns the same cert) while finalize is not.",
+      "evidence": [
+        "agent/nodes/finalizer.py:OrderFinalizerNode",
+        "agent/nodes/finalizer.py:CertDownloaderNode"
+      ],
+      "invariants": [
+        "OrderFinalizerNode never itself downloads the certificate -- it only transitions current_order.status and sets certificate_url",
+        "A missing csr_der_hex or certificate_url is treated as a recoverable error (appended to error_log), never a raised exception"
+      ],
+      "last_validated": "2026-08-25T16:12:40.889171+00:00",
+      "module": "agent/nodes/finalizer.py",
+      "name": "finalize-then-download-two-node-split",
+      "related": []
+    },
     "graph-mode-branching-acme-vs-spiffe": {
       "confidence": 0.95,
       "contracts": [
@@ -632,6 +653,24 @@
         "mcp-ca-input-mode-explicit-resolution",
         "domain-path-traversal-guard"
       ]
+    },
+    "node-callable-structural-protocol": {
+      "confidence": 0.8,
+      "contracts": [
+        "Any class registered in NODE_REGISTRY must implement __call__(self, state: AgentState) -> dict, returning a partial state update dict"
+      ],
+      "created_at": "2026-08-25T16:12:35.454128+00:00",
+      "description": "NodeCallable is a typing.Protocol (structural typing), not a base class -- any object with a matching __call__(state: AgentState) -> dict signature satisfies it without inheriting from anything. This is what lets NODE_REGISTRY (agent/nodes/registry.py) instantiate and wire together node classes from 13 otherwise-unrelated modules uniformly.",
+      "evidence": [
+        "agent/nodes/base.py:NodeCallable"
+      ],
+      "invariants": [
+        "NodeCallable is never subclassed directly -- it is satisfied structurally, so adding a new node type requires no import of or coupling to base.py"
+      ],
+      "last_validated": "2026-08-25T16:12:35.454150+00:00",
+      "module": "agent/nodes/base.py",
+      "name": "node-callable-structural-protocol",
+      "related": []
     },
     "node-registry-class-instantiation-factory": {
       "confidence": 0.85,
@@ -791,6 +830,26 @@
         "node-registry-class-instantiation-factory"
       ]
     },
+    "revocation-loop-per-domain-retry-scope": {
+      "confidence": 0.8,
+      "contracts": [
+        "revocation_loop_router must be called only after cert_revoker, never directly after pick_next_revocation_domain, since it depends on cert_revoker having set or cleared retry_not_before"
+      ],
+      "created_at": "2026-08-25T16:12:45.810818+00:00",
+      "description": "PickNextRevocationDomainNode and revocation_loop_router jointly implement the revocation graph's per-domain loop: popping revocation_targets always resets retry_count/retry_delay_seconds and clears current_nonce, so a domain's retry budget never carries over from the previous domain. revocation_loop_router reads retry_not_before (set by cert_revoker/error classification) before consulting revocation_targets, so a scheduled retry for the CURRENT domain always takes priority over advancing to the next one.",
+      "evidence": [
+        "agent/nodes/revocation_router.py:PickNextRevocationDomainNode",
+        "agent/nodes/revocation_router.py:revocation_loop_router"
+      ],
+      "invariants": [
+        "current_nonce is always cleared to None when a new revocation domain is picked, forcing the next cert_revoker call to fetch a fresh nonce",
+        "retry_not_before being non-None always routes to \"retry\" regardless of whether revocation_targets is also non-empty"
+      ],
+      "last_validated": "2026-08-25T16:12:45.810831+00:00",
+      "module": "agent/nodes/revocation_router.py",
+      "name": "revocation-loop-per-domain-retry-scope",
+      "related": []
+    },
     "revocation-retry-error-classification": {
       "confidence": 0.8,
       "contracts": [
@@ -835,6 +894,26 @@
         "mcp-temporary-settings-override-contextmanager"
       ]
     },
+    "spiffe-attestor-svid-identity-match-guard": {
+      "confidence": 0.8,
+      "contracts": [
+        "storage_manager can consume current_order.full_chain_pem regardless of whether it was populated by the ACME finalize/download chain or by spiffe_attestor"
+      ],
+      "created_at": "2026-08-25T16:12:51.349812+00:00",
+      "description": "SpiffeAttestorNode fetches ALL SVIDs the Workload API returns for the calling process, then explicitly filters to the one whose spiffe_id matches state[\"current_domain\"], refusing to proceed if no exact match is found. This guards against storing a different workload identity's cert/key under the wrong domain's directory -- the Workload API can return multiple SVIDs for a process with multiple registered identities. It writes privkey.pem to disk itself (mirroring CsrGeneratorNode's role in the ACME flow) and populates current_order.full_chain_pem so the existing storage_manager node handles both flows identically without modification.",
+      "evidence": [
+        "agent/nodes/spiffe_attestor.py:SpiffeAttestorNode"
+      ],
+      "invariants": [
+        "A workload API response containing SVIDs but none matching current_domain is always treated as a failure (failed_renewals + error_log), never silently stores an unrelated identity's credentials",
+        "privkey.pem written by this node always gets mode 0o600 immediately, matching CsrGeneratorNode's domain-private-key handling",
+        "Missing spiffe package or unreachable/misconfigured SPIRE_AGENT_SOCKET_PATH are both non-fatal, recoverable-error paths, not raised exceptions -- the run continues to the next domain"
+      ],
+      "last_validated": "2026-08-25T16:12:51.349859+00:00",
+      "module": "agent/nodes/spiffe_attestor.py",
+      "name": "spiffe-attestor-svid-identity-match-guard",
+      "related": []
+    },
     "spiffe-mode-terminal-failure-semantics": {
       "confidence": 0.8,
       "contracts": [
@@ -864,6 +943,6 @@
     "extracted_at": "2026-07-04T03:55:16.785719+00:00",
     "last_reviewed": "2026-07-14T23:01:26.831965+00:00",
     "note": "validated at 537226e0c7be97d19517385e35523d0b6158c5c4; deep-corrected evidence for config.py/main.py/scanner.py/storage.py-derived concepts (drifted line ranges from AcmeConfig/SpiffeConfig split + CLI additions), fast-path bumped last_validated for concepts whose module had zero commits since prior extraction commit 4d79b09a1a0699e9807113c883511f6001034b73",
-    "updated_at": "2026-08-19T03:22:10.743614+00:00"
+    "updated_at": "2026-08-25T16:12:51.349926+00:00"
   }
 }
