@@ -963,6 +963,31 @@
       ],
       "last_validated": "2026-08-31T05:42:15.590165+00:00",
       "created_at": "2026-08-31T05:42:15.590165+00:00"
+    },
+    "atomic-write-tmp-fsync-rename": {
+      "name": "atomic-write-tmp-fsync-rename",
+      "module": "storage/atomic.py",
+      "description": "Every write into the certificate store goes through atomic_write_text / atomic_write_bytes: create a temp file (prefix .{name}. suffix .tmp) in the SAME directory as the target, write, flush, os.fsync the fd, then os.replace() onto the target -- an atomic rename on POSIX. A crash mid-write leaves the previous file fully intact; a half-written PEM is never visible to a reader. On any exception the temp file is unlinked and the error re-raised, so no .tmp debris survives a failure. The temp file must be in the same directory (not tempfile's default) because os.replace is only atomic within one filesystem. This is the code behind CLAUDE.md's 'write nothing halfway' principle. storage/filesystem.py:write_cert_files routes all five artefacts (cert.pem, chain.pem, fullchain.pem, privkey.pem, metadata.json) through the private _write wrapper, and chmods privkey.pem to 0o600 immediately after its atomic write.",
+      "invariants": [
+        "the temp file is created in path.parent, never the system temp dir -- os.replace is atomic only within a single filesystem",
+        "os.fsync is called on the fd before os.replace, so the rename never publishes data still sitting in the page cache",
+        "on any write error the temp file is os.unlink'd before the exception propagates -- a failed write leaves neither a partial target nor .tmp debris",
+        "atomicity is per-file, not per-cert: write_cert_files writes its five files through separate atomic_write calls, so a crash between them can leave a new cert.pem beside an old privkey.pem",
+        "privkey.pem is chmod'd 0o600 in write_cert_files right after _write returns -- there is a brief window where it exists at the mkstemp default mode"
+      ],
+      "contracts": [
+        "atomic_write_text / atomic_write_bytes create path.parent (mkdir parents=True, exist_ok=True) if absent",
+        "callers never write cert-store files with open()/write_text() directly -- storage.filesystem._write is the only writer and it delegates here"
+      ],
+      "confidence": 0.9,
+      "evidence": [
+        "storage/atomic.py:atomic_write_text",
+        "storage/atomic.py:atomic_write_bytes",
+        "storage/filesystem.py:write_cert_files",
+        "storage/filesystem.py:_write"
+      ],
+      "last_validated": "2026-08-31T05:47:12.282476+00:00",
+      "created_at": "2026-08-31T05:47:12.282476+00:00"
     }
   },
   "meta": {

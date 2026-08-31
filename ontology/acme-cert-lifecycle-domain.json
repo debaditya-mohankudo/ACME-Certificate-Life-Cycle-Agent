@@ -121,6 +121,11 @@
       "bounded_context": "Certificate Lifecycle Management",
       "definition": "The per-domain private key generated alongside a CSR (ACME flow) or handed back by the Workload API (SPIFFE flow). Written straight to disk at mode 0o600 by the node that creates it; its content never appears in AgentState, matching AcmeAccountKey's treatment.",
       "evidence": "agent/nodes/csr.py:CsrGeneratorNode.run, agent/nodes/spiffe_attestor.py:SpiffeAttestorNode.run"
+    },
+    "AtomicWrite": {
+      "bounded_context": "Certificate Lifecycle Management",
+      "definition": "The temp-file -> fsync -> os.replace() sequence every write into the certificate store passes through (atomic_write_text / atomic_write_bytes, reached via storage.filesystem._write). The temp file is created in the target's own directory so the rename is atomic within one filesystem; a crash mid-write leaves the previous file fully intact and a half-written PEM is never visible to a reader. This is the code behind CLAUDE.md's 'write nothing halfway' principle. The guarantee is per-file, not per-certificate: write_cert_files() writes cert.pem, chain.pem, fullchain.pem, privkey.pem and metadata.json through five separate atomic writes, so a crash between them can leave a new cert.pem beside an old privkey.pem. privkey.pem is chmod'd 0o600 immediately after its atomic write, so it briefly exists at the mkstemp default mode.",
+      "evidence": "storage/atomic.py:atomic_write_text, storage/filesystem.py:write_cert_files"
     }
   },
   "relations": [
@@ -155,6 +160,10 @@
     {"subject": "ErrorHandlerNode", "predicate": "references", "object": "RetrySchedulerNode",
      "note": "ErrorHandlerNode decides retry vs abort and sets retry_not_before; RetrySchedulerNode is the only node that actually waits on it, then clears it -- the decision and the enforcement are deliberately separate nodes."},
     {"subject": "CertDownloaderNode", "predicate": "references", "object": "OrderFinalizerNode",
-     "note": "CertDownloaderNode reads AcmeOrder.certificate_url, which only OrderFinalizerNode ever sets -- a one-directional dependency expressed only through shared AgentState fields, not a function call between the two."}
+     "note": "CertDownloaderNode reads AcmeOrder.certificate_url, which only OrderFinalizerNode ever sets -- a one-directional dependency expressed only through shared AgentState fields, not a function call between the two."},
+    {"subject": "CertRecord", "predicate": "relates", "object": "AtomicWrite",
+     "note": "A CertRecord holds the on-disk cert/key paths that write_cert_files produced; AtomicWrite is why a CertRecord scanned right after a crashed renewal still points at the intact previous cert rather than a truncated file."},
+    {"subject": "DomainPrivateKey", "predicate": "relates", "object": "AtomicWrite",
+     "note": "privkey.pem is written via atomic_write_text and then chmod'd 0o600 by write_cert_files -- two steps, so the key exists briefly at the mkstemp default mode between the atomic rename and the chmod. AtomicWrite protects the file's contents; it does not make the create+chmod a single operation."}
   ]
 }
