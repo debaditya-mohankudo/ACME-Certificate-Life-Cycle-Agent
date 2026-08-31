@@ -126,6 +126,26 @@
       "bounded_context": "Certificate Lifecycle Management",
       "definition": "A supporting term: kept for the DomainPrivateKey / CertRecord edges below rather than for its own sake -- it is a write mechanism, not a first-class domain noun, so do not read it as one or try to promote it. The temp-file -> fsync -> os.replace() sequence every write into the certificate store passes through (atomic_write_text / atomic_write_bytes, reached via storage.filesystem._write). The temp file is created in the target's own directory so the rename is atomic within one filesystem; a crash mid-write leaves the previous file fully intact and a half-written PEM is never visible to a reader. This is the code behind CLAUDE.md's 'write nothing halfway' principle. The guarantee is per-file, not per-certificate: write_cert_files() writes cert.pem, chain.pem, fullchain.pem, privkey.pem and metadata.json through five separate atomic writes, so a crash between them can leave a new cert.pem beside an old privkey.pem. privkey.pem is chmod'd 0o600 immediately after its atomic write, so it briefly exists at the mkstemp default mode.",
       "evidence": "storage/atomic.py:atomic_write_text, storage/filesystem.py:write_cert_files"
+    },
+    "Rfc8555": {
+      "bounded_context": "ACME Protocol Flow",
+      "definition": "RFC 8555 (Automatic Certificate Management Environment) -- the wire protocol the whole ACME Protocol Flow context implements: directory and nonce, newAccount (with EAB where a CA requires it), newOrder, authorizations, challenges (HTTP-01 §8.3, DNS-01 §8.4), finalize and download (§7.4), revokeCert (§7.6). CLAUDE.md's 'follow the spec, and where the spec is strict, be strict' is about this document. doc/RFC_COMPLIANCE.md is the per-clause conformance map; where a term's definition cites a section number (e.g. AcmeOrder's §7.5 reuse, CertDownloaderNode's §7.4.2) it is a section of this RFC.",
+      "evidence": "acme/client.py, doc/RFC_COMPLIANCE.md"
+    },
+    "Rfc5280": {
+      "bounded_context": "Certificate Lifecycle Management",
+      "definition": "RFC 5280 (X.509 PKI Certificate and CRL Profile) -- referenced here for two distinct things: (1) the CRL reason codes 0-10 (§5.3.1) carried by RevocationReasonCode and validated in acme/client.py:revoke_certificate; (2) the issuer Distinguished Name and Authority Information Access extension (§4.1.2.4, §4.2.2.1) parsed when advisorily detecting which CA issued an on-disk cert (the CaMismatchDetection behaviour noted on CertRecord). Not the certificate-issuance profile in general -- only these two touch points.",
+      "evidence": "acme/client.py:AcmeClient.revoke_certificate, storage/filesystem.py:parse_issuer"
+    },
+    "Revocation": {
+      "bounded_context": "Certificate Lifecycle Management",
+      "definition": "Permanently invalidating an already-issued certificate before its natural expiry, via a dedicated StateGraph (agent/revocation_graph.py) separate from the renewal graph. One POST to the CA's revokeCert endpoint per RFC 8555 §7.6, carrying the base64url DER certificate and an optional RevocationReasonCode. Irreversible and best-effort: a single domain's failure is logged into failed_revocations and the loop advances (see RevocationLoopRouter), never halting the run. Triggered only on demand (CLI --revoke-cert), never automatically.",
+      "evidence": "agent/revocation_graph.py, agent/nodes/revoker.py:CertRevokerNode.run"
+    },
+    "RevocationReasonCode": {
+      "bounded_context": "Certificate Lifecycle Management",
+      "definition": "The RFC 5280 §5.3.1 CRL reason code (integer 0-10) attached to a Revocation: in practice 0=unspecified, 1=keyCompromise, 4=superseded, 5=cessationOfOperation. Validated to the 0-10 range in acme/client.py:revoke_certificate; omitted from the revokeCert payload entirely when 0, per RFC 8555 §7.6 which makes the field optional. Comes from a deterministic CLI argument (--reason), never from the LLM -- the revoke-cert skill maps an operator's plain-English cause to a code as advisory input only, the code that acts is the validated integer. reporter.py maps it back to a name for the summary.",
+      "evidence": "agent/state.py:AcmeOrder, agent/nodes/reporter.py"
     }
   },
   "relations": [
@@ -164,6 +184,18 @@
     {"subject": "CertRecord", "predicate": "relates", "object": "AtomicWrite",
      "note": "A CertRecord holds the on-disk cert/key paths that write_cert_files produced; AtomicWrite is why a CertRecord scanned right after a crashed renewal still points at the intact previous cert rather than a truncated file."},
     {"subject": "DomainPrivateKey", "predicate": "relates", "object": "AtomicWrite",
-     "note": "privkey.pem is written via atomic_write_text and then chmod'd 0o600 by write_cert_files -- two steps, so the key exists briefly at the mkstemp default mode between the atomic rename and the chmod. AtomicWrite protects the file's contents; it does not make the create+chmod a single operation."}
+     "note": "privkey.pem is written via atomic_write_text and then chmod'd 0o600 by write_cert_files -- two steps, so the key exists briefly at the mkstemp default mode between the atomic rename and the chmod. AtomicWrite protects the file's contents; it does not make the create+chmod a single operation."},
+    {"subject": "AcmeOrder", "predicate": "references", "object": "Rfc8555",
+     "note": "AcmeOrder's whole lifecycle -- newOrder, the parallel authorization/challenge arrays, finalize, download -- is RFC 8555 §7.4 vocabulary; the section numbers cited in AcmeOrder's and CertDownloaderNode's definitions are sections of this RFC."},
+    {"subject": "Challenge", "predicate": "references", "object": "Rfc8555",
+     "note": "HTTP-01 is RFC 8555 §8.3, DNS-01 is §8.4; the key-authorization construction and the already-valid-authorization reuse rule (§7.5) that ChallengeVerifierNode guards against both come from this RFC."},
+    {"subject": "Revocation", "predicate": "references", "object": "Rfc8555",
+     "note": "The revokeCert request shape -- POST-as-GET-style signed POST of the base64url DER cert to the directory's revokeCert URL, optional reason field -- is RFC 8555 §7.6."},
+    {"subject": "Revocation", "predicate": "references", "object": "Rfc5280",
+     "note": "The reason field carried by a Revocation is an RFC 5280 §5.3.1 CRL reason code, surfaced here as RevocationReasonCode."},
+    {"subject": "RevocationReasonCode", "predicate": "part-of", "object": "Revocation",
+     "note": "Not a standalone entity -- it is the optional integer field on a single Revocation request, held in AgentState as revocation_reason and validated to 0-10 by acme/client.py:revoke_certificate."},
+    {"subject": "Revocation", "predicate": "relates", "object": "RevocationLoopRouter",
+     "note": "RevocationLoopRouter is the per-domain loop that drives one Revocation attempt at a time, deciding retry / next_domain / all_done after cert_revoker -- the orchestration around the protocol act, in the same shape PickNextDomainNode + the renewal loop wrap a renewal."}
   ]
 }
