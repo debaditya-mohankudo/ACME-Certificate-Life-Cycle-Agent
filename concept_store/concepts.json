@@ -936,6 +936,33 @@
         "graph-mode-branching-acme-vs-spiffe",
         "cert-issuance-mode-strict-exclusivity"
       ]
+    },
+    "integration-tests-pebble-env-gated-ci-excluded": {
+      "name": "integration-tests-pebble-env-gated-ci-excluded",
+      "module": "tests/conftest.py",
+      "description": "The Pebble/SPIRE integration tests drive the real compiled graph end-to-end against a local stub CA, but they are environment-gated and excluded from CI. requires_pebble / requires_spire are pytest.mark.skipif guards that probe a live socket at collection time (TCP localhost:14000 for Pebble; the Workload API Unix socket for SPIRE) with a 1s timeout -- an absent server means the test is skipped, never failed. CI (.github/workflows/tests.yml) runs `pytest -m \"not integration\"` under `-n auto`, so integration coverage is a local/manual gate only, never enforced by CI. The `integration` marker (pyproject.toml) also means 'run sequentially only': these tests share the process-wide config.settings singleton and one Pebble instance, so parallel execution would corrupt state. The pebble_settings / spire_settings fixtures swap the whole config.settings object (an AcmeConfig/SpiffeConfig pointed at the local stub, CA_PROVIDER='custom', ACME_INSECURE=True) and restore the original in teardown -- the same singleton-swap pattern as runtime-settings-override-singleton-swap and mcp-temporary-settings-override-contextmanager. Pebble runs with PEBBLE_VA_ALWAYS_VALID=1 so HTTP-01/DNS-01 challenges auto-approve without real DNS or port-80 access; the LLM planner is mocked (mock_llm_nodes patches llm.factory.init_chat_model) so no API key is needed.",
+      "invariants": [
+        "every integration test carries pytestmark = pytest.mark.integration and a @requires_pebble or @requires_spire decorator -- an unguarded test hitting a live CA would fail the suite on any machine without the stub",
+        "CI runs `pytest -m \"not integration\"`; no integration test result is ever enforced by CI",
+        "integration-marked tests run sequentially, never under `-n auto` -- they share config.settings and a single Pebble instance",
+        "pebble_settings / spire_settings restore the original config.settings object in teardown; swapping settings without the fixture leaks the stub config into later tests"
+      ],
+      "contracts": [
+        "_pebble_running() / _spire_running() probe reachability with a 1s timeout at import time, so collection stays fast even with no stub running",
+        "ACME_INSECURE=True is test-only -- it disables TLS verification against Pebble's self-signed CA and must never appear in a real config"
+      ],
+      "confidence": 0.9,
+      "evidence": [
+        "tests/conftest.py:requires_pebble",
+        "tests/conftest.py:pebble_settings",
+        "tests/conftest.py:_pebble_running",
+        "tests/conftest.py:spire_settings",
+        "tests/test_lifecycle_pebble.py:test_certificate_lifecycle",
+        "pyproject.toml",
+        ".github/workflows/tests.yml"
+      ],
+      "last_validated": "2026-08-31T05:42:15.590165+00:00",
+      "created_at": "2026-08-31T05:42:15.590165+00:00"
     }
   },
   "meta": {
