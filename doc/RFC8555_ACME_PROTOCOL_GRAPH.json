@@ -1,0 +1,1054 @@
+{
+  "meta": {
+    "title": "RFC 8555 ACME hypergraph",
+    "as_of": "2026-09-09",
+    "frame": "Built from RFC 8555 (with RFC 8737 for tls-alpn-01), scoped to the core certificate-issuance flow. Nodes are atomic protocol facts in PKI / certificate-management domain language; edges are typed, possibly n-ary relationships over a closed vocabulary. The order, authorization, and challenge state machines are modelled as transitions_to edges with the trigger in the rationale.",
+    "sources": [
+      "RFC 8555",
+      "RFC 8737"
+    ],
+    "repo": "ACME-Certificate-Life-Cycle-Agent",
+    "note": "Spec-reference graph: RFC 8555 (with RFC 8737 for tls-alpn-01) scoped to the core certificate-issuance flow, in PKI / certificate-management domain language. This is a map of the PROTOCOL as specified, not of this repo's code -- unlike ontology/acme-cert-lifecycle-domain.json (the codebase ubiquitous-language ontology, evidence-cited to symbols). Companion prose: doc/RFC8555_ACME_PROTOCOL_GRAPH.md and doc/RFC_COMPLIANCE.md. Nodes are atomic protocol facts; edges are the binary projection of typed, possibly n-ary hyperedges (grouped by hyperedge_id; the n-ary grouping lives in the .md). The order / authorization / challenge state machines are modelled as transitions_to edges with the trigger in the rationale.",
+    "source_url": "https://www.rfc-editor.org/info/rfc8555/"
+  },
+  "relation_types": {
+    "is_a": "source is a kind of target",
+    "part_of": "source is contained in target",
+    "precedes": "source reliably occurs before target in the protocol sequence",
+    "causes": "a change in source produces a change in target; see sign",
+    "enables": "source is a precondition that makes target possible",
+    "constrains": "source sets a guard, ceiling, or rejection condition on target; see sign",
+    "determines": "source is a formal input to target's definition or value",
+    "authenticates": "source cryptographically establishes the origin / legitimacy of target (added for RFC 8555)",
+    "proves_control_of": "source demonstrates the requester's practical control over the identifier target (added for RFC 8555)",
+    "authorizes": "source is the standing permission that the target operation consumes; kept distinct from enables because authorization is a first-class ACME object (added for RFC 8555)",
+    "transitions_to": "state-machine edge: source status becomes target status on the trigger named in the rationale (added for RFC 8555)"
+  },
+  "nodes": [
+    {
+      "id": "acme_client",
+      "label": "The ACME client acts for the certificate applicant and holds the account key pair; it originates every protocol request",
+      "category": "actor",
+      "source": [
+        "RFC 8555"
+      ]
+    },
+    {
+      "id": "acme_ca",
+      "label": "The ACME server is the CA; it issues nonces, registers accounts, creates authorizations, runs validation, and issues certificates",
+      "category": "actor",
+      "source": [
+        "RFC 8555"
+      ]
+    },
+    {
+      "id": "directory_resource",
+      "label": "The directory is the ACME entry point; a GET returns the URLs for newNonce, newAccount, newOrder, newAuthz, revokeCert, keyChange, plus a meta object",
+      "category": "resource",
+      "source": [
+        "RFC 8555"
+      ]
+    },
+    {
+      "id": "account_resource",
+      "label": "An account object represents the client's registration and binds the account public key to a status, a contact list, and the termsOfServiceAgreed flag",
+      "category": "resource",
+      "source": [
+        "RFC 8555"
+      ]
+    },
+    {
+      "id": "order_resource",
+      "label": "An order object represents one certificate request, carrying identifiers, authorization URLs, a finalize URL, an expires timestamp, a status, and (once issued) a certificate URL",
+      "category": "resource",
+      "source": [
+        "RFC 8555"
+      ]
+    },
+    {
+      "id": "authorization_resource",
+      "label": "An authorization object is the CA's per-identifier grant to an account; it holds the identifier, a challenges list, a status, and (when valid) a required expires timestamp",
+      "category": "resource",
+      "source": [
+        "RFC 8555"
+      ]
+    },
+    {
+      "id": "challenge_resource",
+      "label": "A challenge object is one offered proof-of-control method inside an authorization, carrying type, token, url, and status",
+      "category": "resource",
+      "source": [
+        "RFC 8555"
+      ]
+    },
+    {
+      "id": "certificate_resource",
+      "label": "The certificate resource is the issued PEM certificate chain, fetched by POST-as-GET from the order's certificate URL",
+      "category": "resource",
+      "source": [
+        "RFC 8555"
+      ]
+    },
+    {
+      "id": "replay_nonce",
+      "label": "A replay nonce is a single-use server value delivered in the Replay-Nonce header and obtained from newNonce; responses carrying it are marked no-store",
+      "category": "credential",
+      "source": [
+        "RFC 8555"
+      ]
+    },
+    {
+      "id": "account_key_pair",
+      "label": "The account key pair is generated client-side; its public key is registered on the account and its private key signs every subsequent request",
+      "category": "credential",
+      "source": [
+        "RFC 8555"
+      ]
+    },
+    {
+      "id": "jws_request",
+      "label": "Every ACME POST body is a JWS whose protected header carries alg, nonce, url, and exactly one of jwk or kid",
+      "category": "credential",
+      "source": [
+        "RFC 8555"
+      ],
+      "qualifier": "Flattened JSON Serialization; no detached payload; no unprotected header"
+    },
+    {
+      "id": "jwk_vs_kid",
+      "label": "newAccount and revokeCert carry the full public key in the jwk header; every other request carries kid = the account URL",
+      "category": "credential",
+      "source": [
+        "RFC 8555"
+      ]
+    },
+    {
+      "id": "csr_object",
+      "label": "Order finalization submits a base64url PKCS#10 CSR whose requested names must match the order's identifiers",
+      "category": "credential",
+      "source": [
+        "RFC 8555"
+      ]
+    },
+    {
+      "id": "key_authorization",
+      "label": "The key authorization is token + \".\" + base64url(SHA-256(account-key JWK thumbprint)), binding a challenge token to the account key",
+      "category": "proof",
+      "source": [
+        "RFC 8555"
+      ]
+    },
+    {
+      "id": "dns_identifier",
+      "label": "An identifier is a {type:\"dns\", value:<domain>} pair naming a name to be certified; wildcard authorizations set wildcard:true",
+      "category": "identifier",
+      "source": [
+        "RFC 8555"
+      ]
+    },
+    {
+      "id": "http_01",
+      "label": "http-01: the client serves the key authorization as the body of http://<domain>/.well-known/acme-challenge/<token>",
+      "category": "proof",
+      "source": [
+        "RFC 8555"
+      ]
+    },
+    {
+      "id": "dns_01",
+      "label": "dns-01: the client publishes a TXT record at _acme-challenge.<domain> whose value is base64url(SHA-256(key authorization)); the only method valid for wildcards",
+      "category": "proof",
+      "source": [
+        "RFC 8555"
+      ],
+      "qualifier": "only method valid for wildcard identifiers"
+    },
+    {
+      "id": "tls_alpn_01",
+      "label": "tls-alpn-01: the client serves a self-signed certificate carrying the key-authorization digest via the acme-tls/1 ALPN protocol on port 443",
+      "category": "proof",
+      "source": [
+        "RFC 8737"
+      ],
+      "qualifier": "defined in RFC 8737, not RFC 8555"
+    },
+    {
+      "id": "new_nonce_op",
+      "label": "newNonce: a HEAD or GET that returns a fresh Replay-Nonce and nothing else",
+      "category": "operation",
+      "source": [
+        "RFC 8555"
+      ]
+    },
+    {
+      "id": "new_account_op",
+      "label": "newAccount: a jwk-signed POST with contact and termsOfServiceAgreed; a 201 returns the account URL in the Location header",
+      "category": "operation",
+      "source": [
+        "RFC 8555"
+      ]
+    },
+    {
+      "id": "new_order_op",
+      "label": "newOrder: a POST of the identifiers list; a 201 returns a pending order with its authorization URLs and finalize URL",
+      "category": "operation",
+      "source": [
+        "RFC 8555"
+      ]
+    },
+    {
+      "id": "fetch_authz_op",
+      "label": "The client POST-as-GETs each authorization URL to read its challenge list and pick one method",
+      "category": "operation",
+      "source": [
+        "RFC 8555"
+      ]
+    },
+    {
+      "id": "respond_challenge_op",
+      "label": "The client POSTs an empty object to the chosen challenge URL to signal the proof is provisioned and validation may start",
+      "category": "operation",
+      "source": [
+        "RFC 8555"
+      ]
+    },
+    {
+      "id": "validation_check",
+      "label": "On challenge response the CA connects to the identifier (HTTP path, DNS TXT, or TLS-ALPN) and compares the retrieved artifact to the expected key authorization, with retries",
+      "category": "operation",
+      "source": [
+        "RFC 8555"
+      ]
+    },
+    {
+      "id": "finalize_op",
+      "label": "Once the order is ready the client POSTs the CSR to the order's finalize URL",
+      "category": "operation",
+      "source": [
+        "RFC 8555"
+      ]
+    },
+    {
+      "id": "download_cert_op",
+      "label": "The client POST-as-GETs the order's certificate URL to download the PEM chain",
+      "category": "operation",
+      "source": [
+        "RFC 8555"
+      ]
+    },
+    {
+      "id": "nonce_antireplay",
+      "label": "Each nonce is single-use; a stale or unknown nonce is rejected with badNonce and a fresh nonce is supplied for retry",
+      "category": "constraint",
+      "source": [
+        "RFC 8555"
+      ]
+    },
+    {
+      "id": "url_binding",
+      "label": "The JWS protected \"url\" header must equal the HTTP request URL, binding the signature to one endpoint",
+      "category": "constraint",
+      "source": [
+        "RFC 8555"
+      ]
+    },
+    {
+      "id": "tos_agreement",
+      "label": "When the directory meta requires it, newAccount without termsOfServiceAgreed:true does not create an account",
+      "category": "constraint",
+      "source": [
+        "RFC 8555"
+      ]
+    },
+    {
+      "id": "order_expiry",
+      "label": "The order's expires timestamp bounds its lifetime; past it the order is invalid",
+      "category": "constraint",
+      "source": [
+        "RFC 8555"
+      ]
+    },
+    {
+      "id": "post_as_get",
+      "label": "Reads of account-bound resources use POST-as-GET - a signed JWS with an empty (\"\") payload - not an anonymous GET",
+      "category": "constraint",
+      "source": [
+        "RFC 8555"
+      ]
+    },
+    {
+      "id": "order_pending",
+      "label": "Order status \"pending\": at least one of the order's authorizations is not yet valid",
+      "category": "state",
+      "source": [
+        "RFC 8555"
+      ]
+    },
+    {
+      "id": "order_ready",
+      "label": "Order status \"ready\": every authorization is valid and the client may finalize",
+      "category": "state",
+      "source": [
+        "RFC 8555"
+      ]
+    },
+    {
+      "id": "order_processing",
+      "label": "Order status \"processing\": the CA is issuing from the submitted CSR",
+      "category": "state",
+      "source": [
+        "RFC 8555"
+      ]
+    },
+    {
+      "id": "order_valid",
+      "label": "Order status \"valid\": the certificate is issued and the order's certificate URL is populated",
+      "category": "state",
+      "source": [
+        "RFC 8555"
+      ]
+    },
+    {
+      "id": "order_invalid",
+      "label": "Order status \"invalid\": an authorization failure/expiry, a processing error, or order expiry has terminated the order",
+      "category": "state",
+      "source": [
+        "RFC 8555"
+      ]
+    },
+    {
+      "id": "authz_pending",
+      "label": "Authorization status \"pending\": no challenge has yet succeeded",
+      "category": "state",
+      "source": [
+        "RFC 8555"
+      ]
+    },
+    {
+      "id": "authz_valid",
+      "label": "Authorization status \"valid\": one challenge succeeded; an expires timestamp is now required",
+      "category": "state",
+      "source": [
+        "RFC 8555"
+      ]
+    },
+    {
+      "id": "authz_invalid",
+      "label": "Authorization status \"invalid\": a challenge failed or an error occurred",
+      "category": "state",
+      "source": [
+        "RFC 8555"
+      ]
+    },
+    {
+      "id": "authz_terminal_other",
+      "label": "A valid authorization can later move to \"deactivated\" (client request), \"expired\" (expires passes), or \"revoked\" (server)",
+      "category": "state",
+      "source": [
+        "RFC 8555"
+      ],
+      "qualifier": "post-issuance; outside the core issuance flow"
+    },
+    {
+      "id": "challenge_pending",
+      "label": "Challenge status \"pending\": the client has not yet responded",
+      "category": "state",
+      "source": [
+        "RFC 8555"
+      ]
+    },
+    {
+      "id": "challenge_processing",
+      "label": "Challenge status \"processing\": the CA is attempting validation and may retry",
+      "category": "state",
+      "source": [
+        "RFC 8555"
+      ]
+    },
+    {
+      "id": "challenge_valid",
+      "label": "Challenge status \"valid\": the CA confirmed the proof and set the validated timestamp",
+      "category": "state",
+      "source": [
+        "RFC 8555"
+      ]
+    },
+    {
+      "id": "challenge_invalid",
+      "label": "Challenge status \"invalid\": validation failed after the CA's retries",
+      "category": "state",
+      "source": [
+        "RFC 8555"
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "relation": "precedes",
+      "from": "directory_resource",
+      "to": "new_nonce_op",
+      "rationale": "canonical ACME issuance sequence from directory to certificate download",
+      "hyperedge_id": "he00",
+      "source": [
+        "RFC 8555 \u00a77.1"
+      ]
+    },
+    {
+      "relation": "precedes",
+      "from": "directory_resource",
+      "to": "new_account_op",
+      "rationale": "canonical ACME issuance sequence from directory to certificate download",
+      "hyperedge_id": "he00",
+      "source": [
+        "RFC 8555 \u00a77.1"
+      ]
+    },
+    {
+      "relation": "precedes",
+      "from": "directory_resource",
+      "to": "new_order_op",
+      "rationale": "canonical ACME issuance sequence from directory to certificate download",
+      "hyperedge_id": "he00",
+      "source": [
+        "RFC 8555 \u00a77.1"
+      ]
+    },
+    {
+      "relation": "precedes",
+      "from": "directory_resource",
+      "to": "fetch_authz_op",
+      "rationale": "canonical ACME issuance sequence from directory to certificate download",
+      "hyperedge_id": "he00",
+      "source": [
+        "RFC 8555 \u00a77.1"
+      ]
+    },
+    {
+      "relation": "precedes",
+      "from": "directory_resource",
+      "to": "respond_challenge_op",
+      "rationale": "canonical ACME issuance sequence from directory to certificate download",
+      "hyperedge_id": "he00",
+      "source": [
+        "RFC 8555 \u00a77.1"
+      ]
+    },
+    {
+      "relation": "precedes",
+      "from": "directory_resource",
+      "to": "validation_check",
+      "rationale": "canonical ACME issuance sequence from directory to certificate download",
+      "hyperedge_id": "he00",
+      "source": [
+        "RFC 8555 \u00a77.1"
+      ]
+    },
+    {
+      "relation": "precedes",
+      "from": "directory_resource",
+      "to": "finalize_op",
+      "rationale": "canonical ACME issuance sequence from directory to certificate download",
+      "hyperedge_id": "he00",
+      "source": [
+        "RFC 8555 \u00a77.1"
+      ]
+    },
+    {
+      "relation": "precedes",
+      "from": "directory_resource",
+      "to": "download_cert_op",
+      "rationale": "canonical ACME issuance sequence from directory to certificate download",
+      "hyperedge_id": "he00",
+      "source": [
+        "RFC 8555 \u00a77.1"
+      ]
+    },
+    {
+      "relation": "determines",
+      "from": "directory_resource",
+      "to": "new_nonce_op",
+      "rationale": "the directory's fields supply the URL each operation targets",
+      "hyperedge_id": "he01",
+      "source": [
+        "RFC 8555 \u00a77.1.1"
+      ]
+    },
+    {
+      "relation": "determines",
+      "from": "directory_resource",
+      "to": "new_account_op",
+      "rationale": "the directory's fields supply the URL each operation targets",
+      "hyperedge_id": "he01",
+      "source": [
+        "RFC 8555 \u00a77.1.1"
+      ]
+    },
+    {
+      "relation": "determines",
+      "from": "directory_resource",
+      "to": "new_order_op",
+      "rationale": "the directory's fields supply the URL each operation targets",
+      "hyperedge_id": "he01",
+      "source": [
+        "RFC 8555 \u00a77.1.1"
+      ]
+    },
+    {
+      "relation": "part_of",
+      "from": "challenge_resource",
+      "to": "authorization_resource",
+      "rationale": "challenges nest in an authorization; authorizations nest by URL in an order",
+      "hyperedge_id": "he02",
+      "source": [
+        "RFC 8555 \u00a77.1.3",
+        "RFC 8555 \u00a77.1.4"
+      ]
+    },
+    {
+      "relation": "part_of",
+      "from": "challenge_resource",
+      "to": "order_resource",
+      "rationale": "challenges nest in an authorization; authorizations nest by URL in an order",
+      "hyperedge_id": "he02",
+      "source": [
+        "RFC 8555 \u00a77.1.3",
+        "RFC 8555 \u00a77.1.4"
+      ]
+    },
+    {
+      "relation": "determines",
+      "from": "dns_identifier",
+      "to": "new_order_op",
+      "rationale": "the identifiers submitted to newOrder determine the set of authorizations the CA creates, one per identifier",
+      "hyperedge_id": "he03",
+      "source": [
+        "RFC 8555 \u00a77.4"
+      ]
+    },
+    {
+      "relation": "determines",
+      "from": "dns_identifier",
+      "to": "authorization_resource",
+      "rationale": "the identifiers submitted to newOrder determine the set of authorizations the CA creates, one per identifier",
+      "hyperedge_id": "he03",
+      "source": [
+        "RFC 8555 \u00a77.4"
+      ]
+    },
+    {
+      "relation": "authenticates",
+      "sign": "+",
+      "from": "account_key_pair",
+      "to": "jws_request",
+      "rationale": "the client signs each JWS with the account private key and the CA verifies it against the registered public key",
+      "hyperedge_id": "he04",
+      "source": [
+        "RFC 8555 \u00a76.2"
+      ]
+    },
+    {
+      "relation": "authenticates",
+      "sign": "+",
+      "from": "account_key_pair",
+      "to": "acme_ca",
+      "rationale": "the client signs each JWS with the account private key and the CA verifies it against the registered public key",
+      "hyperedge_id": "he04",
+      "source": [
+        "RFC 8555 \u00a76.2"
+      ]
+    },
+    {
+      "relation": "determines",
+      "from": "jwk_vs_kid",
+      "to": "new_account_op",
+      "rationale": "newAccount carries the full jwk because no account exists yet; every later JWS carries kid = account URL",
+      "hyperedge_id": "he05",
+      "source": [
+        "RFC 8555 \u00a76.2"
+      ]
+    },
+    {
+      "relation": "determines",
+      "from": "jwk_vs_kid",
+      "to": "jws_request",
+      "rationale": "newAccount carries the full jwk because no account exists yet; every later JWS carries kid = account URL",
+      "hyperedge_id": "he05",
+      "source": [
+        "RFC 8555 \u00a76.2"
+      ]
+    },
+    {
+      "relation": "constrains",
+      "sign": "-",
+      "from": "nonce_antireplay",
+      "to": "replay_nonce",
+      "rationale": "every JWS must carry a previously-unused nonce or it is rejected, which blocks replay",
+      "hyperedge_id": "he06",
+      "source": [
+        "RFC 8555 \u00a76.5"
+      ]
+    },
+    {
+      "relation": "constrains",
+      "sign": "-",
+      "from": "nonce_antireplay",
+      "to": "jws_request",
+      "rationale": "every JWS must carry a previously-unused nonce or it is rejected, which blocks replay",
+      "hyperedge_id": "he06",
+      "source": [
+        "RFC 8555 \u00a76.5"
+      ]
+    },
+    {
+      "relation": "precedes",
+      "from": "new_nonce_op",
+      "to": "jws_request",
+      "rationale": "a fresh nonce must be obtained before the first signed POST",
+      "source": [
+        "RFC 8555 \u00a77.2"
+      ]
+    },
+    {
+      "relation": "constrains",
+      "sign": "-",
+      "from": "url_binding",
+      "to": "jws_request",
+      "rationale": "the protected url header must equal the request URL, so a captured JWS cannot be replayed against another endpoint",
+      "source": [
+        "RFC 8555 \u00a76.4"
+      ]
+    },
+    {
+      "relation": "constrains",
+      "sign": "-",
+      "from": "tos_agreement",
+      "to": "new_account_op",
+      "rationale": "without termsOfServiceAgreed:true (when the directory requires it) no account is created",
+      "hyperedge_id": "he09",
+      "source": [
+        "RFC 8555 \u00a77.3.1"
+      ]
+    },
+    {
+      "relation": "constrains",
+      "sign": "-",
+      "from": "tos_agreement",
+      "to": "account_resource",
+      "rationale": "without termsOfServiceAgreed:true (when the directory requires it) no account is created",
+      "hyperedge_id": "he09",
+      "source": [
+        "RFC 8555 \u00a77.3.1"
+      ]
+    },
+    {
+      "relation": "constrains",
+      "from": "post_as_get",
+      "to": "fetch_authz_op",
+      "rationale": "reads of these account-bound resources use a signed empty-payload JWS, not an anonymous GET",
+      "hyperedge_id": "he10",
+      "source": [
+        "RFC 8555 \u00a76.3"
+      ]
+    },
+    {
+      "relation": "constrains",
+      "from": "post_as_get",
+      "to": "download_cert_op",
+      "rationale": "reads of these account-bound resources use a signed empty-payload JWS, not an anonymous GET",
+      "hyperedge_id": "he10",
+      "source": [
+        "RFC 8555 \u00a76.3"
+      ]
+    },
+    {
+      "relation": "is_a",
+      "from": "challenge_resource",
+      "to": "http_01",
+      "rationale": "a challenge object's type is one of http-01, dns-01, or tls-alpn-01",
+      "hyperedge_id": "he11",
+      "source": [
+        "RFC 8555 \u00a78",
+        "RFC 8737"
+      ]
+    },
+    {
+      "relation": "is_a",
+      "from": "challenge_resource",
+      "to": "dns_01",
+      "rationale": "a challenge object's type is one of http-01, dns-01, or tls-alpn-01",
+      "hyperedge_id": "he11",
+      "source": [
+        "RFC 8555 \u00a78",
+        "RFC 8737"
+      ]
+    },
+    {
+      "relation": "is_a",
+      "from": "challenge_resource",
+      "to": "tls_alpn_01",
+      "rationale": "a challenge object's type is one of http-01, dns-01, or tls-alpn-01",
+      "hyperedge_id": "he11",
+      "source": [
+        "RFC 8555 \u00a78",
+        "RFC 8737"
+      ]
+    },
+    {
+      "relation": "determines",
+      "from": "challenge_resource",
+      "to": "account_key_pair",
+      "rationale": "the key authorization is derived from the challenge token and the account-key thumbprint, so a stolen token alone cannot answer the challenge",
+      "hyperedge_id": "he12",
+      "source": [
+        "RFC 8555 \u00a78.1"
+      ]
+    },
+    {
+      "relation": "determines",
+      "from": "challenge_resource",
+      "to": "key_authorization",
+      "rationale": "the key authorization is derived from the challenge token and the account-key thumbprint, so a stolen token alone cannot answer the challenge",
+      "hyperedge_id": "he12",
+      "source": [
+        "RFC 8555 \u00a78.1"
+      ]
+    },
+    {
+      "relation": "proves_control_of",
+      "sign": "+",
+      "from": "http_01",
+      "to": "key_authorization",
+      "rationale": "serving the key authorization at /.well-known/acme-challenge/<token> over HTTP on the domain demonstrates control of the name",
+      "hyperedge_id": "he13",
+      "source": [
+        "RFC 8555 \u00a78.3"
+      ]
+    },
+    {
+      "relation": "proves_control_of",
+      "sign": "+",
+      "from": "http_01",
+      "to": "dns_identifier",
+      "rationale": "serving the key authorization at /.well-known/acme-challenge/<token> over HTTP on the domain demonstrates control of the name",
+      "hyperedge_id": "he13",
+      "source": [
+        "RFC 8555 \u00a78.3"
+      ]
+    },
+    {
+      "relation": "proves_control_of",
+      "sign": "+",
+      "from": "dns_01",
+      "to": "key_authorization",
+      "rationale": "a TXT record at _acme-challenge.<domain> holding SHA-256(key authorization) demonstrates control; usable for wildcard names",
+      "hyperedge_id": "he14",
+      "source": [
+        "RFC 8555 \u00a78.4"
+      ]
+    },
+    {
+      "relation": "proves_control_of",
+      "sign": "+",
+      "from": "dns_01",
+      "to": "dns_identifier",
+      "rationale": "a TXT record at _acme-challenge.<domain> holding SHA-256(key authorization) demonstrates control; usable for wildcard names",
+      "hyperedge_id": "he14",
+      "source": [
+        "RFC 8555 \u00a78.4"
+      ]
+    },
+    {
+      "relation": "proves_control_of",
+      "sign": "+",
+      "from": "tls_alpn_01",
+      "to": "key_authorization",
+      "rationale": "a self-signed certificate carrying the key-authorization digest, served via acme-tls/1 ALPN on port 443, demonstrates control",
+      "hyperedge_id": "he15",
+      "source": [
+        "RFC 8737 \u00a73"
+      ]
+    },
+    {
+      "relation": "proves_control_of",
+      "sign": "+",
+      "from": "tls_alpn_01",
+      "to": "dns_identifier",
+      "rationale": "a self-signed certificate carrying the key-authorization digest, served via acme-tls/1 ALPN on port 443, demonstrates control",
+      "hyperedge_id": "he15",
+      "source": [
+        "RFC 8737 \u00a73"
+      ]
+    },
+    {
+      "relation": "precedes",
+      "from": "respond_challenge_op",
+      "to": "validation_check",
+      "rationale": "posting to the challenge URL triggers the CA's validation attempt, which on success marks the challenge valid",
+      "hyperedge_id": "he16",
+      "source": [
+        "RFC 8555 \u00a77.5.1"
+      ]
+    },
+    {
+      "relation": "precedes",
+      "from": "respond_challenge_op",
+      "to": "challenge_valid",
+      "rationale": "posting to the challenge URL triggers the CA's validation attempt, which on success marks the challenge valid",
+      "hyperedge_id": "he16",
+      "source": [
+        "RFC 8555 \u00a77.5.1"
+      ]
+    },
+    {
+      "relation": "causes",
+      "sign": "+",
+      "from": "validation_check",
+      "to": "challenge_valid",
+      "rationale": "one successful validation propagates up: challenge to valid, authorization to valid, order to ready once all authorizations valid",
+      "hyperedge_id": "he17",
+      "source": [
+        "RFC 8555 \u00a77.1.6"
+      ]
+    },
+    {
+      "relation": "causes",
+      "sign": "+",
+      "from": "validation_check",
+      "to": "authz_valid",
+      "rationale": "one successful validation propagates up: challenge to valid, authorization to valid, order to ready once all authorizations valid",
+      "hyperedge_id": "he17",
+      "source": [
+        "RFC 8555 \u00a77.1.6"
+      ]
+    },
+    {
+      "relation": "causes",
+      "sign": "+",
+      "from": "validation_check",
+      "to": "order_ready",
+      "rationale": "one successful validation propagates up: challenge to valid, authorization to valid, order to ready once all authorizations valid",
+      "hyperedge_id": "he17",
+      "source": [
+        "RFC 8555 \u00a77.1.6"
+      ]
+    },
+    {
+      "relation": "authorizes",
+      "sign": "+",
+      "from": "authz_valid",
+      "to": "dns_identifier",
+      "rationale": "a valid authorization is the CA's standing permission that this account may be issued certificates for that identifier; finalize consumes it",
+      "hyperedge_id": "he18",
+      "source": [
+        "RFC 8555 \u00a77.1.4"
+      ]
+    },
+    {
+      "relation": "authorizes",
+      "sign": "+",
+      "from": "authz_valid",
+      "to": "finalize_op",
+      "rationale": "a valid authorization is the CA's standing permission that this account may be issued certificates for that identifier; finalize consumes it",
+      "hyperedge_id": "he18",
+      "source": [
+        "RFC 8555 \u00a77.1.4"
+      ]
+    },
+    {
+      "relation": "precedes",
+      "from": "order_ready",
+      "to": "finalize_op",
+      "rationale": "finalize is only accepted while the order is in ready",
+      "source": [
+        "RFC 8555 \u00a77.4"
+      ]
+    },
+    {
+      "relation": "determines",
+      "from": "csr_object",
+      "to": "dns_identifier",
+      "rationale": "the CA issues for exactly the identifiers common to the order and the CSR; a mismatch or weak key is rejected as badCSR",
+      "hyperedge_id": "he20",
+      "source": [
+        "RFC 8555 \u00a77.4"
+      ]
+    },
+    {
+      "relation": "determines",
+      "from": "csr_object",
+      "to": "certificate_resource",
+      "rationale": "the CA issues for exactly the identifiers common to the order and the CSR; a mismatch or weak key is rejected as badCSR",
+      "hyperedge_id": "he20",
+      "source": [
+        "RFC 8555 \u00a77.4"
+      ]
+    },
+    {
+      "relation": "precedes",
+      "from": "finalize_op",
+      "to": "order_processing",
+      "rationale": "after finalize the order moves processing to valid and the client then downloads the chain",
+      "hyperedge_id": "he21",
+      "source": [
+        "RFC 8555 \u00a77.4"
+      ]
+    },
+    {
+      "relation": "precedes",
+      "from": "finalize_op",
+      "to": "order_valid",
+      "rationale": "after finalize the order moves processing to valid and the client then downloads the chain",
+      "hyperedge_id": "he21",
+      "source": [
+        "RFC 8555 \u00a77.4"
+      ]
+    },
+    {
+      "relation": "precedes",
+      "from": "finalize_op",
+      "to": "download_cert_op",
+      "rationale": "after finalize the order moves processing to valid and the client then downloads the chain",
+      "hyperedge_id": "he21",
+      "source": [
+        "RFC 8555 \u00a77.4"
+      ]
+    },
+    {
+      "relation": "enables",
+      "from": "account_resource",
+      "to": "new_order_op",
+      "rationale": "only an authenticated account (kid) can create an order",
+      "source": [
+        "RFC 8555 \u00a77.4"
+      ]
+    },
+    {
+      "relation": "transitions_to",
+      "from": "order_pending",
+      "to": "order_ready",
+      "rationale": "trigger: every authorization reaches valid",
+      "source": [
+        "RFC 8555 \u00a77.1.6"
+      ]
+    },
+    {
+      "relation": "transitions_to",
+      "from": "order_ready",
+      "to": "order_processing",
+      "rationale": "trigger: client POSTs the CSR to finalize",
+      "source": [
+        "RFC 8555 \u00a77.1.6"
+      ]
+    },
+    {
+      "relation": "transitions_to",
+      "from": "order_processing",
+      "to": "order_valid",
+      "rationale": "trigger: the CA issues the certificate and populates the certificate URL",
+      "source": [
+        "RFC 8555 \u00a77.1.6"
+      ]
+    },
+    {
+      "relation": "transitions_to",
+      "from": "order_pending",
+      "to": "order_invalid",
+      "rationale": "trigger: an authorization becomes invalid or expired, or an error occurs",
+      "source": [
+        "RFC 8555 \u00a77.1.6"
+      ]
+    },
+    {
+      "relation": "transitions_to",
+      "from": "order_ready",
+      "to": "order_invalid",
+      "rationale": "trigger: an error, or the order's expires passes before finalize",
+      "source": [
+        "RFC 8555 \u00a77.1.6"
+      ]
+    },
+    {
+      "relation": "transitions_to",
+      "from": "order_processing",
+      "to": "order_invalid",
+      "rationale": "trigger: an error during issuance",
+      "source": [
+        "RFC 8555 \u00a77.1.6"
+      ]
+    },
+    {
+      "relation": "transitions_to",
+      "from": "authz_pending",
+      "to": "authz_valid",
+      "rationale": "trigger: one of its challenges becomes valid",
+      "source": [
+        "RFC 8555 \u00a77.1.6"
+      ]
+    },
+    {
+      "relation": "transitions_to",
+      "from": "authz_pending",
+      "to": "authz_invalid",
+      "rationale": "trigger: a challenge fails or an error occurs",
+      "source": [
+        "RFC 8555 \u00a77.1.6"
+      ]
+    },
+    {
+      "relation": "transitions_to",
+      "from": "authz_valid",
+      "to": "authz_terminal_other",
+      "rationale": "trigger: client deactivation, expiry of expires, or server revocation",
+      "source": [
+        "RFC 8555 \u00a77.1.6"
+      ]
+    },
+    {
+      "relation": "transitions_to",
+      "from": "challenge_pending",
+      "to": "challenge_processing",
+      "rationale": "trigger: client POSTs to the challenge URL",
+      "source": [
+        "RFC 8555 \u00a77.1.6"
+      ]
+    },
+    {
+      "relation": "transitions_to",
+      "from": "challenge_processing",
+      "to": "challenge_valid",
+      "rationale": "trigger: CA validation succeeds and sets validated",
+      "source": [
+        "RFC 8555 \u00a77.1.6"
+      ]
+    },
+    {
+      "relation": "transitions_to",
+      "from": "challenge_processing",
+      "to": "challenge_invalid",
+      "rationale": "trigger: CA validation fails after retries",
+      "source": [
+        "RFC 8555 \u00a77.1.6"
+      ]
+    },
+    {
+      "relation": "transitions_to",
+      "from": "challenge_processing",
+      "to": "challenge_processing",
+      "rationale": "trigger: CA retry or client-requested retry",
+      "source": [
+        "RFC 8555 \u00a77.1.6",
+        "RFC 8555 \u00a78.2"
+      ]
+    },
+    {
+      "relation": "constrains",
+      "sign": "-",
+      "from": "order_expiry",
+      "to": "order_resource",
+      "rationale": "the expires timestamp caps the order's usable lifetime",
+      "source": [
+        "RFC 8555 \u00a77.1.3"
+      ]
+    }
+  ]
+}
