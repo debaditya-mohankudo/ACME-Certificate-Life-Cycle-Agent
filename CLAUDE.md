@@ -79,20 +79,29 @@ but it has to be argued for explicitly, and the argument belongs in writing.
 
 ## Knowledge base
 
-`concept_store/concepts.json`, `models/*.sysml`, and `ontology/*.json` are
-three complementary maps of this codebase, not source of truth — the code is.
-`concepts.json` records non-obvious invariants and contracts per module
-(evidence-cited, symbol-based) so a change that touches a documented concept
-should update or add an entry in the same breath — it answers "what does this
-module promise." `models/` holds the SysML structural and requirements model;
-it only needs revisiting when a change alters structure, routing, protocol
-behaviour, or the shape of workflow state, per the rule above — routine
-feature work usually doesn't require touching it. `ontology/` records the
-domain's ubiquitous language — what each cross-cutting term (AgentState,
-AcmeOrder, CertIssuanceMode, ...) means and how it relates to the others,
-evidence-cited the same way as `concepts.json` — it answers "what is this
-thing, and what is it to the others," since a term there can span several
-modules and a module can define several terms, unlike `concepts.json`'s
-per-file shape. It only needs revisiting when a change introduces, renames,
-or changes the relationship between domain terms — routine feature work
-usually doesn't require touching it either.
+Knowledge about this codebase runs from intent to detail — each layer a map,
+none of them the territory. **The code is the only source of truth.** When a
+map disagrees with the source, the source wins and the map is the bug to fix.
+
+**This file — the spirit.** Why the system is shaped the way it is: the
+principles above, and what outranks what. It names no function; it is the
+lens you read the other layers through.
+
+**`ontology/*.json` — the taxonomy.** The domain's ubiquitous language: what
+each cross-cutting term (AgentState, AcmeOrder, CertIssuanceMode, ...) means
+and how it relates to the others, evidence-cited to real symbols. A term can
+span several modules and a module can define several terms. It answers "what
+is this thing, and what is it to the others." Revisit it only when a change
+introduces, renames, or re-relates a domain term — routine feature work
+usually doesn't touch it.
+
+**`concept_store/concepts.json` — the contracts.** Non-obvious invariants and
+contracts per module, evidence-cited and symbol-based, one file's worth per
+entry. It answers "what does this module promise." A change that touches a
+documented concept updates or adds its entry in the same breath. This is the
+layer nearest the code — and still not the code.
+
+`models/*.sysml` sits alongside as the SysML structural and requirements
+model; it only needs revisiting when a change alters structure, routing,
+protocol behaviour, or the shape of workflow state, per "How to work here"
+above — routine feature work usually doesn't touch it either.
