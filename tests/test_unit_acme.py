@@ -875,7 +875,7 @@ def test_eab_create_account_injects_eab(account_key):
         headers={"Location": "https://acme.test/acct/99", "Replay-Nonce": "eabnonce"},
         status=201,
     )
-    # Use a valid 32-byte base64url-encoded HMAC key (per RFC 8555 minimum is 16 bytes)
+    # Use a valid 32-byte base64url-encoded HMAC key (implementation minimum is 16 bytes)
     valid_hmac_key = base64.urlsafe_b64encode(b"a" * 32).decode().rstrip("=")
     client = ZeroSSLAcmeClient(
         eab_key_id="my-kid", eab_hmac_key=valid_hmac_key,
@@ -931,7 +931,7 @@ def test_eab_jws_rejects_empty_eab_hmac_key(account_key):
 
 
 def test_eab_jws_rejects_short_hmac_key(account_key):
-    """create_eab_jws raises ValueError when HMAC key < 16 bytes (RFC 8555 minimum)."""
+    """create_eab_jws raises ValueError when HMAC key < 16 bytes (implementation minimum)."""
     import base64
     # Create a base64url string that decodes to only 8 bytes
     short_key = base64.urlsafe_b64encode(b"12345678").decode().rstrip("=")

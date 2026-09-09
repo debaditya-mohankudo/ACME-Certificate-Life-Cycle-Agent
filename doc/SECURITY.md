@@ -259,11 +259,12 @@ would reject. This guard mirrors the nonce pre-condition check.
 Including the URL in the signature binds each request to a specific ACME endpoint.
 A signed `newOrder` request cannot be replayed against `revokeCert`.
 
-### EAB (External Account Binding) — HMAC-SHA256 (RFC 8739 § 2)
+### EAB (External Account Binding) — HMAC-SHA256 (RFC 8555 §7.3.4)
 
-DigiCert, ZeroSSL, and Sectigo require EAB per RFC 8739 § 2. The outer EAB JWS is signed with
-**HS256** (HMAC-SHA256) using the EAB HMAC key provided by DigiCert
-([acme/jws.py](../acme/jws.py)):
+DigiCert, ZeroSSL, and Sectigo require EAB per RFC 8555 §7.3.4. That section
+mandates a MAC-based `alg` but no specific algorithm; the outer EAB JWS is
+signed with **HS256** (HMAC-SHA256) as this project's choice, using the EAB
+HMAC key provided by the CA ([acme/jws.py](../acme/jws.py)):
 
 ```python
 mac = hmac.new(hmac_key, signing_input, hashlib.sha256).digest()

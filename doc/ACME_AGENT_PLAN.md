@@ -54,7 +54,7 @@ DigiCert ACME requires **EAB credentials** (unlike Let's Encrypt which allows an
 - `EAB_KEY_ID` — Key identifier
 - `EAB_HMAC_KEY` — Base64url-encoded HMAC key
 
-These are passed during ACME account registration per **RFC 8739**.
+These are passed during ACME account registration per **RFC 8555 §7.3.4**.
 
 ### ACME Protocol Flow (RFC 8555)
 

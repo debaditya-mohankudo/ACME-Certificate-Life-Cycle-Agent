@@ -22,7 +22,7 @@ async, concurrency, parallel, checkpoint, nonce, stateful, CI, MCP, revoke, HTTP
 
 This is the overriding principle. All other principles exist to serve it.
 
-**RFC compliance is non-negotiable.** Every ACME operation must conform to the relevant RFC sections — RFC 8555 (ACME protocol), RFC 8739 (EAB), RFC 7638 (JWK thumbprint), and RFC 5280 (revocation reason codes). Deviations from the protocol are defects, not trade-offs. Where the RFC permits optionality, this project chooses the safer interpretation. Any change that introduces a protocol deviation — even a minor one — must be treated as a breaking change and requires explicit justification.
+**RFC compliance is non-negotiable.** Every ACME operation must conform to the relevant RFC sections — RFC 8555 (ACME protocol, including §7.3.4 for EAB), RFC 7638 (JWK thumbprint), and RFC 5280 (revocation reason codes). Deviations from the protocol are defects, not trade-offs. Where the RFC permits optionality, this project chooses the safer interpretation. Any change that introduces a protocol deviation — even a minor one — must be treated as a breaking change and requires explicit justification.
 
 **Security auditability is a first-class design constraint.** The system must be auditable by a third party without requiring deep familiarity with the codebase. This means:
 

@@ -9,7 +9,7 @@
 
 ## Retrieval keywords
 
-`RFC 8555`, `RFC 8739`, `RFC 7638`, `RFC 5280`, `nonce`, `badNonce`, `external account binding`, `EAB`, `HTTP-01`, `DNS-01`, `revokeCert`, `POST-as-GET`, `scope`
+`RFC 8555`, `RFC 8555 §7.3.4`, `RFC 7638`, `RFC 5280`, `nonce`, `badNonce`, `external account binding`, `EAB`, `HTTP-01`, `DNS-01`, `revokeCert`, `POST-as-GET`, `scope`
 [negative keywords / not-this-doc]
 async, concurrency, parallel, checkpoint, stateful, planner, LLM, CI, MCP, revoke, configuration, storage, atomic, filesystem, docker, container, test, coverage, audit, performance, optimization, operator
 
@@ -21,8 +21,7 @@ This document maps every implemented protocol operation to its RFC section, list
 
 | RFC | Title | Role in this project |
 |-----|-------|----------------------|
-| **RFC 8555** | Automatic Certificate Management Environment (ACME) | Core protocol |
-| **RFC 8739** | External Account Binding for ACME (EAB) | DigiCert, ZeroSSL, Sectigo account creation |
+| **RFC 8555** | Automatic Certificate Management Environment (ACME) | Core protocol; §7.3.4 (External Account Binding) drives DigiCert, ZeroSSL, Sectigo account creation |
 | **RFC 7638** | JSON Web Key (JWK) Thumbprint | HTTP-01 and DNS-01 key-authorization computation |
 | **RFC 5280** | X.509 PKI Certificate and CRL Profile | Revocation reason codes |
 
@@ -49,7 +48,7 @@ Nonce discipline (§6.5):
 |-----------|-------|---------|--------|
 | Create account | `termsOfServiceAgreed=true` | §7.3 | ✅ Implemented |
 | Lookup existing account | `onlyReturnExisting=true` | §7.3.1 | ✅ Implemented |
-| EAB-wrapped account creation | HS256 outer JWS; used by DigiCert, ZeroSSL, Sectigo | RFC 8739 | ✅ Implemented |
+| EAB-wrapped account creation | HS256 outer JWS; used by DigiCert, ZeroSSL, Sectigo | §7.3.4 | ✅ Implemented |
 
 Account private key is **never** stored in `AgentState`. It lives on disk only (`ACCOUNT_KEY_PATH`, mode 0o600). This prevents it appearing in LangSmith traces or checkpoint snapshots.
 
@@ -87,16 +86,18 @@ Reason codes follow RFC 5280 §5.3.1 (0–10). The `reason` field is omitted fro
 
 ---
 
-## RFC 8739 — External Account Binding
+## RFC 8555 §7.3.4 — External Account Binding
 
-Applies to: **DigiCert**, **ZeroSSL**, **Sectigo**.
+Applies to: **DigiCert**, **ZeroSSL**, **Sectigo**. (EAB has no standalone RFC —
+the draft-ietf-acme-external-account-binding work was folded into RFC 8555
+§7.3.4 before publication.)
 
 Implementation in `acme/client.py` (`EabAcmeClient`):
 
-- Outer JWS protected header: `{"alg": "HS256", "kid": <eab_key_id>, "url": <newAccount_url>}`
+- Outer JWS protected header: `{"alg": "HS256", "kid": <eab_key_id>, "url": <newAccount_url>}` — §7.3.4 requires a MAC-based `alg`; HS256 is this project's choice
 - Payload: the account public key as JWK
 - Signature: HMAC-SHA256 over `base64url(protected) + "." + base64url(payload)` using the decoded HMAC key
-- Minimum HMAC key length: 16 bytes (128 bits) — validated at startup; shorter keys raise `ValueError`
+- Minimum HMAC key length: 16 bytes (128 bits) — an implementation minimum (§7.3.4 mandates none), validated at startup; shorter keys raise `ValueError`
 
 ---
 
@@ -219,7 +220,7 @@ This guarantees no partial writes are ever visible, even on power loss mid-write
 
 | File | Protocol responsibility |
 |------|------------------------|
-| `acme/client.py` | RFC 8555 full flow + RFC 8739 EAB + revocation |
+| `acme/client.py` | RFC 8555 full flow (incl. §7.3.4 EAB) + revocation |
 | `acme/jws.py` | JWS signing, EAB outer JWS, RFC 7638 thumbprint |
 | `acme/crypto.py` | RSA key generation + CSR construction |
 | `acme/http_challenge.py` | HTTP-01 standalone server + webroot writer |

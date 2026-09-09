@@ -1,5 +1,5 @@
 """
-JWK / JWS / EAB utilities for the ACME protocol (RFC 8555 + RFC 8739).
+JWK / JWS / EAB utilities for the ACME protocol (RFC 8555, EAB per §7.3.4).
 
 Uses *josepy* (the library powering Certbot) for battle-tested JWS support.
 
@@ -154,15 +154,17 @@ def create_eab_jws(
     """
     Build the EAB outer-JWS required by EAB-capable CAs (DigiCert, ZeroSSL, Sectigo).
 
-    Per RFC 8739:
+    Per RFC 8555 §7.3.4 (External Account Binding):
       - Protected header: {"alg":"HS256","kid":<eab_kid>,"url":<newAccount url>}
+        (§7.3.4 requires a MAC-based alg; HS256 is this project's choice)
       - Payload: the account public JWK
       - Signature: HMAC-SHA256 keyed with the decoded EAB HMAC key
 
     Raises ValueError if:
       - eab_kid is empty
       - eab_hmac_key_b64url is not valid base64url
-      - Decoded HMAC key is < 16 bytes (per RFC 8739 §2 minimum)
+      - Decoded HMAC key is < 16 bytes (implementation minimum; see
+        validate_eab_hmac_key)
     """
     # Validate eab_kid
     if not eab_kid or not eab_kid.strip():
@@ -238,10 +240,12 @@ def validate_eab_hmac_key(eab_hmac_key_b64url: str) -> bytes:
             f"Must be base64url-encoded bytes."
         ) from exc
 
+    # 16-byte (128-bit) floor is an implementation minimum: RFC 8555 §7.3.4
+    # mandates no key length, and RFC 7518 §3.2 recommends >= 32 bytes for HS256.
     if len(hmac_key) < 16:
         raise ValueError(
             f"EAB HMAC key is too short: {len(hmac_key)} bytes. "
-            f"Must be at least 16 bytes (128 bits) per RFC 8739 §2."
+            f"Must be at least 16 bytes (128 bits)."
         )
 
     return hmac_key

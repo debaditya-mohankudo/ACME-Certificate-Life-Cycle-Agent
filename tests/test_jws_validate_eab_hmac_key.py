@@ -25,7 +25,8 @@ def test_validate_eab_hmac_key_valid():
     assert decoded == key_bytes
 
 
-# Boundary: exactly 16 bytes is the minimum per RFC 8739 §2 — must be accepted
+# Boundary: exactly 16 bytes is the implementation minimum (RFC 8555 §7.3.4
+# sets none) — must be accepted
 def test_validate_eab_hmac_key_exactly_16_bytes():
     key_bytes = b"B" * 16
     key_b64url = base64.urlsafe_b64encode(key_bytes).rstrip(b"=").decode()

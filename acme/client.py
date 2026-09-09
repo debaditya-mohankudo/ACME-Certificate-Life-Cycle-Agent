@@ -462,7 +462,7 @@ class AcmeClient:
 
 class EabAcmeClient(AcmeClient):
     """
-    Intermediate base for CAs that require External Account Binding (RFC 8739).
+    Intermediate base for CAs that require External Account Binding (RFC 8555 §7.3.4).
     DigiCert, ZeroSSL, and Sectigo all use identical EAB logic.
     Subclasses only set DEFAULT_DIRECTORY_URL and call super().__init__().
     """
@@ -488,7 +488,7 @@ class EabAcmeClient(AcmeClient):
         directory: dict,
     ) -> tuple[str, str]:
         """
-        POST /newAccount with EAB binding per RFC 8739.
+        POST /newAccount with EAB binding per RFC 8555 §7.3.4.
         Falls through to plain payload if either EAB credential is empty.
         Returns (account_url, new_nonce).
         """
@@ -509,7 +509,7 @@ class EabAcmeClient(AcmeClient):
 
 
 class DigiCertAcmeClient(EabAcmeClient):
-    """DigiCert ACME client — requires EAB credentials (RFC 8739)."""
+    """DigiCert ACME client — requires EAB credentials (RFC 8555 §7.3.4)."""
 
     DEFAULT_DIRECTORY_URL = "https://acme.digicert.com/v2/DV/directory"
 
@@ -528,7 +528,7 @@ class DigiCertAcmeClient(EabAcmeClient):
 
 
 class ZeroSSLAcmeClient(EabAcmeClient):
-    """ZeroSSL ACME client — requires EAB credentials (RFC 8739)."""
+    """ZeroSSL ACME client — requires EAB credentials (RFC 8555 §7.3.4)."""
 
     DEFAULT_DIRECTORY_URL = "https://acme.zerossl.com/v2/DV90"
 
@@ -547,7 +547,7 @@ class ZeroSSLAcmeClient(EabAcmeClient):
 
 
 class SectigoAcmeClient(EabAcmeClient):
-    """Sectigo ACME client — requires EAB credentials (RFC 8739)."""
+    """Sectigo ACME client — requires EAB credentials (RFC 8555 §7.3.4)."""
 
     DEFAULT_DIRECTORY_URL = "https://acme.sectigo.com/v2/DV"
 

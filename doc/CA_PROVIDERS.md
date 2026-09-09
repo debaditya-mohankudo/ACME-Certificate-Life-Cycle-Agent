@@ -97,7 +97,7 @@ python main.py --once --domains test.example.com
 
 ### See also
 
-- RFC 8739 (EAB): [RFC_COMPLIANCE.md](RFC_COMPLIANCE.md)
+- RFC 8555 §7.3.4 (EAB): [RFC_COMPLIANCE.md](RFC_COMPLIANCE.md)
 - ACME client implementation: [acme/client.py](../acme/client.py) (class `DigiCertAcmeClient`)
 
 ---
