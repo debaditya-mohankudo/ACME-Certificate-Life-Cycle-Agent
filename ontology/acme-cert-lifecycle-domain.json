@@ -9,7 +9,8 @@
     "Agent Orchestration": "The LangGraph machinery that drives ACME Protocol Flow and SPIFFE Attestation Flow to completion: shared state, node callables, routers, and the two compiled graphs (renewal, revocation).",
     "SPIFFE Attestation Flow": "The alternate, non-ACME issuance path: workload identity via SPIRE Agent's Workload API. Shares Agent Orchestration's state/graph shape but has almost no vocabulary in common with ACME Protocol Flow -- SVIDs and trust domains, not orders and challenges.",
     "Certificate Lifecycle Management": "What happens to a certificate once key material exists: on-disk storage layout, expiry scanning, renewal planning/prioritisation, and revocation -- the concerns that exist regardless of which flow produced the certificate.",
-    "Configuration": "Settings resolution: which issuance mode is active, which CA provider and directory URL apply, and how operator input (env vars, CLI overrides, MCP call-scoped overrides) is validated and merged."
+    "Configuration": "Settings resolution: which issuance mode is active, which CA provider and directory URL apply, and how operator input (env vars, CLI overrides, MCP call-scoped overrides) is validated and merged.",
+    "Compliance and Regulation": "The project's conformance surface: which RFCs it implements and to which clauses, where it deliberately chooses strictness, and what is out of scope. Cuts across ACME Protocol Flow and Certificate Lifecycle Management -- the spec obligations those contexts must meet, named separately from the code that meets them. doc/RFC_COMPLIANCE.md is the per-clause map; the section numbers cited throughout the other terms and in concept_store resolve against the RFCs collected here."
   },
   "terms": {
     "AgentState": {
@@ -128,12 +129,12 @@
       "evidence": "storage/atomic.py:atomic_write_text, storage/filesystem.py:write_cert_files"
     },
     "Rfc8555": {
-      "bounded_context": "ACME Protocol Flow",
+      "bounded_context": "Compliance and Regulation",
       "definition": "RFC 8555 (Automatic Certificate Management Environment) -- the wire protocol the whole ACME Protocol Flow context implements: directory and nonce, newAccount (with EAB where a CA requires it), newOrder, authorizations, challenges (HTTP-01 §8.3, DNS-01 §8.4), finalize and download (§7.4), revokeCert (§7.6). CLAUDE.md's 'follow the spec, and where the spec is strict, be strict' is about this document. doc/RFC_COMPLIANCE.md is the per-clause conformance map; where a term's definition cites a section number (e.g. AcmeOrder's §7.5 reuse, CertDownloaderNode's §7.4.2) it is a section of this RFC.",
       "evidence": "acme/client.py, doc/RFC_COMPLIANCE.md"
     },
     "Rfc5280": {
-      "bounded_context": "Certificate Lifecycle Management",
+      "bounded_context": "Compliance and Regulation",
       "definition": "RFC 5280 (X.509 PKI Certificate and CRL Profile) -- referenced here for two distinct things: (1) the CRL reason codes 0-10 (§5.3.1) carried by RevocationReasonCode and validated in acme/client.py:revoke_certificate; (2) the issuer Distinguished Name and Authority Information Access extension (§4.1.2.4, §4.2.2.1) parsed when advisorily detecting which CA issued an on-disk cert (the CaMismatchDetection behaviour noted on CertRecord). Not the certificate-issuance profile in general -- only these two touch points.",
       "evidence": "acme/client.py:AcmeClient.revoke_certificate, storage/filesystem.py:parse_issuer"
     },
@@ -146,6 +147,21 @@
       "bounded_context": "Certificate Lifecycle Management",
       "definition": "The RFC 5280 §5.3.1 CRL reason code (integer 0-10) attached to a Revocation: in practice 0=unspecified, 1=keyCompromise, 4=superseded, 5=cessationOfOperation. Validated to the 0-10 range in acme/client.py:revoke_certificate; omitted from the revokeCert payload entirely when 0, per RFC 8555 §7.6 which makes the field optional. Comes from a deterministic CLI argument (--reason), never from the LLM -- the revoke-cert skill maps an operator's plain-English cause to a code as advisory input only, the code that acts is the validated integer. reporter.py maps it back to a name for the summary.",
       "evidence": "agent/state.py:AcmeOrder, agent/nodes/reporter.py"
+    },
+    "Rfc8739": {
+      "bounded_context": "Compliance and Regulation",
+      "definition": "The RFC the project's files cite for External Account Binding (EAB) -- the HMAC-signed outer JWS that ties a new ACME account to a pre-existing CA account, required by DigiCert, ZeroSSL and Sectigo. Built by acme/jws.py:create_eab_jws (protected header {alg:HS256, kid:<eab_kid>, url:<newAccount>}, payload = the account public JWK, signature = HMAC-SHA256 over the decoded EAB key); the key must be >= 16 bytes, enforced by acme/jws.py:validate_eab_hmac_key. Partial EAB config (only one of ACME_EAB_KEY_ID / ACME_EAB_HMAC_KEY set) is rejected before any network call by config.py:AcmeConfig.validate_eab_credentials, and again at newAccount time by acme/client.py:EabAcmeClient. NOTE: EAB is actually specified in RFC 8555 section 7.3.4 -- RFC 8739 is an unrelated document (STAR certificates). The 'RFC 8739' label is used consistently across the code and doc/RFC_COMPLIANCE.md, so it is kept here as the repo's ubiquitous term; correcting it is a codebase-wide change, not an ontology one.",
+      "evidence": "acme/jws.py:create_eab_jws, acme/jws.py:validate_eab_hmac_key, acme/client.py:EabAcmeClient, config.py:AcmeConfig.validate_eab_credentials"
+    },
+    "Rfc7638": {
+      "bounded_context": "Compliance and Regulation",
+      "definition": "RFC 7638 (JSON Web Key Thumbprint) -- the canonical-JSON SHA-256 hash of a public JWK. acme/jws.py:compute_jwk_thumbprint builds the RFC 7638 section 3.2 canonical form for RSA ({e, kty, n} in lexical order, no whitespace) and base64url-encodes the digest; acme/jws.py:compute_key_authorization concatenates token + '.' + thumbprint to form the HTTP-01 and DNS-01 key-authorization that proves control of an identifier. josepy omits 'kty' from its partial JSON, so the code re-adds it explicitly to match what ACME servers expect.",
+      "evidence": "acme/jws.py:compute_jwk_thumbprint, acme/jws.py:compute_key_authorization"
+    },
+    "RfcComplianceMap": {
+      "bounded_context": "Compliance and Regulation",
+      "definition": "A supporting term for the doc, not a code noun: doc/RFC_COMPLIANCE.md, the per-clause table mapping every implemented protocol operation to its RFC section (RFC 8555 directory/nonce/account/order/authz/challenge/finalize/revoke, RFC 8739 EAB, RFC 7638 thumbprint, RFC 5280 reason codes), together with the explicit strictness choices it records (one nonce consumed per _post_signed, badNonce retried at most _NONCE_RETRIES = 3 times from the error's Replay-Nonce header, parallel domain processing permanently prohibited because a shared nonce cannot be split) and the intentionally-out-of-scope list. It is the human-readable index behind the section numbers cited throughout this ontology and in concept_store.",
+      "evidence": "doc/RFC_COMPLIANCE.md"
     }
   },
   "relations": [
@@ -196,6 +212,20 @@
     {"subject": "RevocationReasonCode", "predicate": "part-of", "object": "Revocation",
      "note": "Not a standalone entity -- it is the optional integer field on a single Revocation request, held in AgentState as revocation_reason and validated to 0-10 by acme/client.py:revoke_certificate."},
     {"subject": "Revocation", "predicate": "relates", "object": "RevocationLoopRouter",
-     "note": "RevocationLoopRouter is the per-domain loop that drives one Revocation attempt at a time, deciding retry / next_domain / all_done after cert_revoker -- the orchestration around the protocol act, in the same shape PickNextDomainNode + the renewal loop wrap a renewal."}
+     "note": "RevocationLoopRouter is the per-domain loop that drives one Revocation attempt at a time, deciding retry / next_domain / all_done after cert_revoker -- the orchestration around the protocol act, in the same shape PickNextDomainNode + the renewal loop wrap a renewal."},
+    {"subject": "RfcComplianceMap", "predicate": "describes", "object": "Rfc8555",
+     "note": "doc/RFC_COMPLIANCE.md's 'RFC 8555 -- ACME Protocol' tables are the per-operation conformance map; every section number cited on Rfc8555 (and on AcmeOrder, Challenge, CertDownloaderNode, Revocation) is indexed there."},
+    {"subject": "RfcComplianceMap", "predicate": "describes", "object": "Rfc5280",
+     "note": "The doc's 'RFCs Referenced' table and revocation section record the two RFC 5280 touch points -- reason codes (section 5.3.1) and issuer DN / AIA parsing -- that Rfc5280 scopes."},
+    {"subject": "RfcComplianceMap", "predicate": "describes", "object": "Rfc8739",
+     "note": "The doc lists 'RFC 8739 -- External Account Binding (EAB)' as a referenced RFC and maps EAB account creation for DigiCert / ZeroSSL / Sectigo; it carries the same 'RFC 8739' label the code uses."},
+    {"subject": "RfcComplianceMap", "predicate": "describes", "object": "Rfc7638",
+     "note": "The doc lists 'RFC 7638 -- JWK Thumbprint' as the basis of HTTP-01 and DNS-01 key-authorization computation."},
+    {"subject": "Rfc8739", "predicate": "relates", "object": "Rfc8555",
+     "note": "EAB is the outer JWS wrapped around RFC 8555's newAccount request; despite the 'RFC 8739' label used repo-wide, the binding is defined in RFC 8555 section 7.3.4. EabAcmeClient overrides only the newAccount payload, everything else is the plain Rfc8555 flow."},
+    {"subject": "Challenge", "predicate": "references", "object": "Rfc7638",
+     "note": "The key-authorization a Challenge proves (token + '.' + thumbprint) uses the RFC 7638 section 3.2 canonical JWK thumbprint from acme/jws.py:compute_jwk_thumbprint for both HTTP-01 and DNS-01."},
+    {"subject": "AcmeConfig", "predicate": "references", "object": "Rfc8739",
+     "note": "AcmeConfig carries ACME_EAB_KEY_ID / ACME_EAB_HMAC_KEY and validate_eab_credentials rejects a partial pair before any network call -- the config-side half of the EAB obligation Rfc8739 names."}
   ]
 }
